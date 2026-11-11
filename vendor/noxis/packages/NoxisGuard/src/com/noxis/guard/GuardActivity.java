@@ -2,7 +2,9 @@ package com.noxis.guard;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.provider.Settings;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.util.TypedValue;
@@ -12,6 +14,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
+
+import java.util.List;
 
 /** Einstellungsoberfläche im Stil der Android-Systemeinstellungen. */
 public class GuardActivity extends Activity {
@@ -37,6 +41,12 @@ public class GuardActivity extends Activity {
         render();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mList != null) render();   // Status nach Rückkehr aus Mullvad/Einstellungen aktualisieren
+    }
+
     private void render() {
         mList.removeAllViews();
         TextView title = text("Noxis Guard", 30, true);
@@ -46,6 +56,8 @@ public class GuardActivity extends Activity {
         sub.setAlpha(0.7f);
         sub.setPadding(dp(8), 0, dp(8), dp(16));
         mList.addView(sub);
+
+        statusCard();
 
         header("Gerätesperre");
         choice("Automatischer Neustart", hoursLabel(Prefs.autoRebootHours(this)),
@@ -66,6 +78,14 @@ public class GuardActivity extends Activity {
                 "Schaltet Bluetooth ab, wenn so lange kein Gerät verbunden ist.",
                 labels(OFF_MIN, false), indexOf(OFF_MIN, Prefs.btOffMin(this)),
                 i -> mPrefs.edit().putInt(Prefs.BT_OFF_MIN, OFF_MIN[i]).apply());
+
+        toggle("2G erlauben",
+                "2G (GSM/EDGE) verschlüsselt schwach oder gar nicht und wird von IMSI-Catchern genutzt, "
+                        + "um Geräte abzuhören. Aus = nur 4G/5G (und 3G, wo vorhanden). Notrufe gehen immer.",
+                Prefs.allow2g(this), on -> {
+                    mPrefs.edit().putBoolean(Prefs.ALLOW_2G, on).apply();
+                    Hardening.apply2g(this, on);
+                });
 
         header("Netzwerk");
         if (Hardening.installed(this, Prefs.MULLVAD)) {
@@ -92,6 +112,51 @@ public class GuardActivity extends Activity {
                     mPrefs.edit().putBoolean(Prefs.CONN_CHECK, on).apply();
                     Hardening.applyConnectivityCheck(this, on);
                 });
+
+        links();
+    }
+
+    private void statusCard() {
+        List<Status.Item> items = Status.check(this);
+        int ok = Status.score(items);
+        header("Schutzstatus");
+        TextView score = text(ok + " von " + items.size() + " Schutzfunktionen aktiv", 20, true);
+        score.setTextColor(ok == items.size() ? 0xFF7CFFB2 : 0xFFFFB27C);
+        score.setPadding(dp(8), 0, dp(8), dp(8));
+        mList.addView(score);
+        for (Status.Item i : items) {
+            TextView t = text((i.ok ? "✓  " : "!  ") + i.title + (i.ok ? "" : "\n     " + i.hint), 14, false);
+            t.setAlpha(i.ok ? 0.75f : 1f);
+            if (!i.ok) t.setTextColor(0xFFFFB27C);
+            t.setPadding(dp(8), dp(4), dp(8), dp(4));
+            mList.addView(t);
+        }
+    }
+
+    private void links() {
+        header("Weitere Schutzbereiche");
+        link("Root-Freigaben (KernelSU)", "Welche Apps Root bekommen – Standard: keine",
+                getPackageManager().getLaunchIntentForPackage("me.weishu.kernelsu"));
+        link("Netzwerkzugriff pro App", "App antippen → Mobile Daten & WLAN → Netzwerkzugriff",
+                new Intent(Settings.ACTION_APPLICATION_SETTINGS));
+        link("Standard-Apps (Browser, Telefon)", "Empfohlen: Cromite als Browser, NothingCall als Telefon",
+                new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
+        link("Systemupdates", "Noxis-Updates von GitHub, signiert mit deinem Schlüssel",
+                getPackageManager().getLaunchIntentForPackage("org.lineageos.updater"));
+        if (Hardening.installed(this, Prefs.MULLVAD)) {
+            link("Mullvad VPN öffnen", "Konto, Server, Verbindung",
+                    getPackageManager().getLaunchIntentForPackage(Prefs.MULLVAD));
+        }
+    }
+
+    private void link(String title, String summary, Intent intent) {
+        if (intent == null) return;
+        LinearLayout row = row(title, summary);
+        row.addView(text("›", 22, false));
+        row.setOnClickListener(v -> {
+            try { startActivity(intent); } catch (RuntimeException e) { /* Ziel fehlt */ }
+        });
+        mList.addView(row);
     }
 
     /* ---------------- Bausteine ---------------- */

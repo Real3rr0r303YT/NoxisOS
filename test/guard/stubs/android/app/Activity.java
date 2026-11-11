@@ -1,1 +1,1 @@
-package android.app; public class Activity extends android.content.Context { protected void onCreate(android.os.Bundle b){} public void setContentView(android.view.View v){} }
+package android.app; public class Activity extends android.content.Context { protected void onCreate(android.os.Bundle b){} protected void onResume(){} public void setContentView(android.view.View v){} public void startActivity(android.content.Intent i){ android.Rec.r("start:"+i.getAction()); } }

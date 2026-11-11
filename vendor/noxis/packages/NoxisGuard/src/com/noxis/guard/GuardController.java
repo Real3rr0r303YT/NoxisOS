@@ -104,6 +104,7 @@ final class GuardController {
             setUsbData(true);
             cancel(ACTION_REBOOT);
             Hardening.applyVpnOnce(mCtx);
+            Hardening.apply2g(mCtx, Prefs.allow2g(mCtx));
         }
     }
 

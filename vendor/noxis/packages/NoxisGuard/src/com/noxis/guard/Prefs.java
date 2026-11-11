@@ -14,6 +14,7 @@ final class Prefs {
     static final String HARDENED_V = "hardened_version";            // int
     static final String VPN_LOCKDOWN = "vpn_lockdown";              // boolean: Mullvad Always-on + Killswitch
     static final String VPN_APPLIED = "vpn_applied";                // boolean: beim ersten Entsperren gesetzt
+    static final String ALLOW_2G = "allow_2g";                      // boolean: 2G (GSM/EDGE/CDMA) erlaubt
 
     static final String MULLVAD = "net.mullvad.mullvadvpn";
     static final boolean DEF_VPN_LOCKDOWN = true;
@@ -24,6 +25,7 @@ final class Prefs {
     static final int DEF_BT_OFF_MIN = 0;
     static final String DEF_DNS = "dns.quad9.net";
     static final boolean DEF_CONN_CHECK = false;
+    static final boolean DEF_ALLOW_2G = false;     // 2G: keine Verschlüsselungspflicht, Ziel von IMSI-Catchern
 
     private Prefs() {}
 
@@ -38,5 +40,6 @@ final class Prefs {
     static int btOffMin(Context c) { return get(c).getInt(BT_OFF_MIN, DEF_BT_OFF_MIN); }
     static String dns(Context c) { return get(c).getString(DNS, DEF_DNS); }
     static boolean connCheck(Context c) { return get(c).getBoolean(CONN_CHECK, DEF_CONN_CHECK); }
+    static boolean allow2g(Context c) { return get(c).getBoolean(ALLOW_2G, DEF_ALLOW_2G); }
     static boolean vpnLockdown(Context c) { return get(c).getBoolean(VPN_LOCKDOWN, DEF_VPN_LOCKDOWN); }
 }

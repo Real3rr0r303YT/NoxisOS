@@ -221,6 +221,8 @@ cmd_apps() {
   install_own_apps
   install_apk GrapheneCamera    "$(gh_latest_asset GrapheneOS/Camera '\.apk$' || true)" false
   install_apk GraphenePdfViewer "$(gh_latest_asset GrapheneOS/PdfViewer '\.apk$' || true)" false
+  # Standard-Browser: Cromite (gehärtetes Chromium – Website-Isolierung, starke Renderer-Sandbox)
+  install_apk Cromite           "$(gh_latest_asset uazo/cromite 'arm64_ChromePublic\.apk$' || true)" false
   install_fennec
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false
   install_apk TorBrowser        "$(tor_url)" false

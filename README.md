@@ -99,7 +99,7 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
 | Name | `vendor/lineage/config/version.mk` | "Noxis-1.0-DATE" in Settings |
-| Browser | `vendor/lineage/config/common.mk` | Jelly out, Firefox (Fennec F-Droid, arm64) in |
+| Browser | `vendor/lineage/config/common.mk` | Jelly out; **Cromite** (hardened Chromium: site isolation, strong renderer sandbox) is the default browser, Firefox (Fennec) stays available |
 
 ## 3. KernelSU – root per app
 
@@ -120,6 +120,7 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 | App | Network | Wi-Fi | Mobile | VPN | Background | Root |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Mullvad VPN | ✓ | ✓ | ✓ | – | ✓ | ✗ |
+| Cromite (default browser) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Firefox (Fennec) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | GrapheneOS Camera | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -132,6 +133,11 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 
 ## 5. Noxis Guard (system app, `vendor/noxis/packages/NoxisGuard`)
 
+The security center of Noxis OS – **Settings → Noxis Guard** (top of the settings) or the app icon.
+
+* **Protection status** – reads the real system state and shows e.g. *7 of 8 protections active*, with a hint for every missing one (killswitch, encrypted DNS, 2G off, USB lock, auto-reboot, no Google connectivity check, random MAC, hidden lock-screen notifications)
+* **Shortcuts** – KernelSU root grants, per-app network access, default apps (browser, phone), system updates, Mullvad
+
 | Function | Default |
 |---|---|
 | Auto-reboot after X h locked (back to BFU) | 18 h |
@@ -141,6 +147,7 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 | Private DNS (DoT) | Quad9 (Mullvad, Cloudflare, off) |
 | Google connectivity check | off |
 | Random MAC per connection | on |
+| 2G (GSM/EDGE/CDMA) – used by IMSI catchers | **blocked** (switch "Allow 2G"; emergency calls always work) |
 | Wi-Fi/BT scanning for location | off |
 | Notification content on the lock screen | hidden |
 | Time server | pool.ntp.org |
@@ -164,7 +171,7 @@ Quick settings: microphone and camera toggles are visible by default.
 ## Tests
 
 ```bash
-./test/guard/run.sh                                          # 20 logic tests for Noxis Guard (JDK only)
+./test/guard/run.sh                                          # 26 logic tests for Noxis Guard (JDK only)
 ./test/test_own_apps.sh                                      # 17 tests: own apps download, SHA-256, overrides
 ./test/test_publish.sh                                       # 8 tests: OTA publishing + Updater JSON
 ./test/test_flow.sh <device-tree> <lineage/config> <tf.zip>  # 36 flow tests for noxis.sh

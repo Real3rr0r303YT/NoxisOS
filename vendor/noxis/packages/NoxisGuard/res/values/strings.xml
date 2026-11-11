@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Noxis Guard</string>
+    <string name="settings_summary">Schutzstatus, VPN-Killswitch, 2G, USB, Neustart, DNS</string>
 </resources>

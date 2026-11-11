@@ -3,4 +3,6 @@
     <!-- Schnellschalter für Mikrofon- und Kamerazugriff (systemweit) -->
     <bool name="config_supportsMicToggle">true</bool>
     <bool name="config_supportsCamToggle">true</bool>
+    <!-- Standard-Browser: Cromite (Chromium-Sandbox + Website-Isolierung); Firefox bleibt wählbar -->
+    <string name="config_defaultBrowser" translatable="false">org.cromite.cromite</string>
 </resources>

@@ -5,13 +5,19 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.VpnManager;
 import android.os.Process;
+import android.telephony.TelephonyManager;
 import android.provider.Settings;
 import android.util.Log;
 
 /** Gehärtete Systemstandards (einmal beim ersten Start, danach über die App änderbar). */
 final class Hardening {
     private static final String TAG = "NoxisGuard";
-    static final int VERSION = 1;
+    static final int VERSION = 2;
+
+    /** GSM, GPRS, EDGE, CDMA, 1xRTT – wie der 2G-Schalter in den Android-Einstellungen. */
+    static final long BITMASK_2G = TelephonyManager.NETWORK_TYPE_BITMASK_GSM
+            | TelephonyManager.NETWORK_TYPE_BITMASK_GPRS | TelephonyManager.NETWORK_TYPE_BITMASK_EDGE
+            | TelephonyManager.NETWORK_TYPE_BITMASK_CDMA | TelephonyManager.NETWORK_TYPE_BITMASK_1xRTT;
 
     private Hardening() {}
 
@@ -30,6 +36,7 @@ final class Hardening {
         putSecure(cr, "lock_screen_allow_private_notifications", 0);
         applyDns(ctx, Prefs.dns(ctx));
         applyConnectivityCheck(ctx, Prefs.connCheck(ctx));
+        apply2g(ctx, Prefs.allow2g(ctx));
         Prefs.get(ctx).edit().putInt(Prefs.HARDENED_V, VERSION).apply();
         Log.i(TAG, "Gehärtete Standardwerte gesetzt (v" + VERSION + ")");
     }
@@ -76,6 +83,27 @@ final class Hardening {
             ctx.getPackageManager().getPackageInfo(pkg, 0);
             return true;
         } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 2G sperren/erlauben (pro SIM in Telephony gespeichert). Wird bei jedem Entsperren erneut
+     * angewendet, damit auch eine neue SIM sofort ohne 2G läuft. Notrufe sind davon ausgenommen.
+     */
+    static boolean apply2g(Context ctx, boolean allow) {
+        try {
+            TelephonyManager tm = ctx.getSystemService(TelephonyManager.class);
+            if (tm == null) return false;
+            long cur = tm.getAllowedNetworkTypesForReason(TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_ENABLE_2G);
+            long want = allow ? (cur | BITMASK_2G) : (cur & ~BITMASK_2G);
+            if (want != cur) {
+                tm.setAllowedNetworkTypesForReason(TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_ENABLE_2G, want);
+                Log.i(TAG, "2G " + (allow ? "erlaubt" : "gesperrt"));
+            }
+            return true;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "2G-Einstellung nicht möglich", e);
             return false;
         }
     }

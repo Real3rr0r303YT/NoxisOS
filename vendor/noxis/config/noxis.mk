@@ -30,6 +30,9 @@ endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GraphenePdfViewer/GraphenePdfViewer.apk),)
 PRODUCT_PACKAGES += GraphenePdfViewer
 endif
+ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/Cromite/Cromite.apk),)
+PRODUCT_PACKAGES += Cromite
+endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/Fennec/Fennec.apk),)
 PRODUCT_PACKAGES += Fennec
 endif
