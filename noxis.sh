@@ -177,7 +177,7 @@ EOF
 # ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
 # name → LineageOS app it replaces (empty = added next to the stock app)
 NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
-NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery:"
+NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery: NoxisLauncher:"
 
 install_own_apps() {
   local base="${NOXIS_APPS_URL:-https://github.com/$NOXIS_APPS_REPO/releases/download/noxis-apps}" tmp entry name over dir

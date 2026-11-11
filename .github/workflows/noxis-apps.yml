@@ -10,7 +10,7 @@ on:
   push:
     paths:
       - .github/workflows/noxis-apps.yml
-      - apps.list
+      - apps/**
 
 permissions:
   contents: write
@@ -29,6 +29,7 @@ jobs:
           - { name: NoxisCalculator, repo: Real3rr0r303YT/Calculator }
           - { name: NoxisCall,       repo: Real3rr0r303YT/NothingCall }
           - { name: NoxisBattery,    repo: Real3rr0r303YT/NothingBattery }
+          - { name: NoxisLauncher,   repo: Real3rr0r303YT/NoxisOS, dir: apps/NoxisLauncher, tests: true }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +40,12 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests
+        if: ${{ matrix.app.tests }}
+        working-directory: ${{ matrix.app.dir || '.' }}
+        run: chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest
       - name: Build release APK (falls back to debug)
+        working-directory: ${{ matrix.app.dir || '.' }}
         run: |
           chmod +x gradlew
           if ./gradlew --no-daemon assembleRelease; then
@@ -57,7 +63,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app.name }}
-          path: out/*
+          path: ${{ matrix.app.dir || '.' }}/out/*
           retention-days: 7
 
   release:

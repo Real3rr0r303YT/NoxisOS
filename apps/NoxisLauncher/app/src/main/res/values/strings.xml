@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Noxis Launcher</string>
+    <string name="search">Search apps</string>
+    <string name="pin">Add to home</string>
+    <string name="unpin">Remove from home</string>
+    <string name="app_info">App info</string>
+    <string name="uninstall">Uninstall</string>
+    <string name="hide">Hide</string>
+    <string name="unhide">Show again</string>
+    <string name="settings">Launcher settings</string>
+    <string name="mono_icons">Monochrome icons</string>
+    <string name="mono_icons_sum">Nothing-style white icons (apps with a monochrome layer)</string>
+    <string name="clock_24h">24-hour clock</string>
+    <string name="show_hidden">Show hidden apps</string>
+    <string name="guard">Noxis Guard</string>
+    <string name="default_home">Set as default home app</string>
+    <string name="no_results">No apps found</string>
+    <string name="home_hint">Swipe up for all apps</string>
+</resources>
