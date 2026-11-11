@@ -19,4 +19,10 @@
     <string name="default_home">Als Standard-Startbildschirm festlegen</string>
     <string name="no_results">Keine Apps gefunden</string>
     <string name="home_hint">Nach oben wischen für alle Apps</string>
+    <string name="search_home">Apps durchsuchen</string>
+    <string name="battery">AKKU %1$d%%</string>
+    <string name="icon_style">App-Symbole statt Buchstaben</string>
+    <string name="icon_style_sum">Aus = Noxis-Buchstabenkacheln, an = die eigenen Symbole der Apps</string>
+    <string name="use_wallpaper">Hintergrundbild verwenden</string>
+    <string name="use_wallpaper_sum">Aus = dunkler Noxis-Hintergrund mit Punktraster</string>
 </resources>

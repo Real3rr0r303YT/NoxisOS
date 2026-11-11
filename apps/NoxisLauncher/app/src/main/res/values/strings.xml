@@ -19,4 +19,10 @@
     <string name="default_home">Set as default home app</string>
     <string name="no_results">No apps found</string>
     <string name="home_hint">Swipe up for all apps</string>
+    <string name="search_home">Search apps</string>
+    <string name="battery">BATTERY %1$d%%</string>
+    <string name="icon_style">App icons instead of letters</string>
+    <string name="icon_style_sum">Off = Noxis letter tiles, on = the apps\' own icons</string>
+    <string name="use_wallpaper">Use wallpaper</string>
+    <string name="use_wallpaper_sum">Off = Noxis dark background with dot grid</string>
 </resources>

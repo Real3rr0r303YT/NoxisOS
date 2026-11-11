@@ -110,6 +110,12 @@ class LauncherPrefs(ctx: Context) {
     var clock24: Boolean
         get() = sp.getBoolean("clock24", true)
         set(v) = sp.edit().putBoolean("clock24", v).apply()
+    var realIcons: Boolean
+        get() = sp.getBoolean("real_icons", false)
+        set(v) = sp.edit().putBoolean("real_icons", v).apply()
+    var wallpaper: Boolean
+        get() = sp.getBoolean("wallpaper", false)
+        set(v) = sp.edit().putBoolean("wallpaper", v).apply()
     var showHidden: Boolean
         get() = sp.getBoolean("show_hidden", false)
         set(v) = sp.edit().putBoolean("show_hidden", v).apply()

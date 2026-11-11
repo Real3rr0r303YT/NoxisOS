@@ -7,7 +7,7 @@ import java.util.Locale
 data class AppKey(val key: String, val label: String, val pkg: String)
 
 object Logic {
-    const val MAX_PINNED = 16   // home grid 4×4
+    const val MAX_PINNED = 8    // home grid: 2 rows × 4, like Noxis Shell on Linux
     const val MAX_DOCK = 4
 
     fun normalize(s: String): String =
@@ -49,6 +49,25 @@ object Logic {
 
     /** Drop pins/hidden entries of apps that no longer exist. */
     fun prune(keys: List<String>, existing: Set<String>): List<String> = keys.filter { it in existing }
+
+    /** Tile monogram: first letter or digit of the label, upper case ("?" if none). */
+    fun monogram(label: String): String =
+        label.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "?"
+
+    /** Drawer sections: (header letter, apps) – letters A–Z, everything else under "#". */
+    fun <T> sections(items: List<T>, label: (T) -> String): List<Pair<String, List<T>>> =
+        items.groupBy { val c = normalize(label(it)).firstOrNull(); if (c != null && c in 'a'..'z') c.uppercase() else "#" }
+            .toList()
+
+    /** "MI, 11 NOV" / "WED, 11 NOV" – the Noxis date line. */
+    fun shortDate(d: java.util.Date, locale: Locale): String =
+        java.text.SimpleDateFormat("EEE, dd MMM", locale).format(d).replace(".", "").uppercase(locale)
+
+    /** Status line parts after the battery: network, then VPN marker. */
+    fun netParts(wifi: Boolean, cellular: Boolean, vpn: Boolean): List<String> = buildList {
+        add(when { wifi -> "WLAN"; cellular -> "MOBIL"; else -> "OFFLINE" })
+        if (vpn) add("VPN")
+    }
 
     fun clock(hour: Int, minute: Int, h24: Boolean): String {
         val h = if (h24) hour else ((hour + 11) % 12) + 1
