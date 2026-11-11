@@ -1,0 +1,1 @@
+package android.os; public final class PowerManager { public void reboot(String reason){android.Rec.r("reboot:"+reason);} }

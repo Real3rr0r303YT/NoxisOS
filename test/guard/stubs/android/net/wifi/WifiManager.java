@@ -1,0 +1,2 @@
+package android.net.wifi; public class WifiManager { public static final String WIFI_STATE_CHANGED_ACTION="w"; public static boolean on=true;
+ public boolean isWifiEnabled(){return on;} @Deprecated public boolean setWifiEnabled(boolean e){android.Rec.r("wifi:"+e);on=e;return true;} }

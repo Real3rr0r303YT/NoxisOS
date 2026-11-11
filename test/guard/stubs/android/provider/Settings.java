@@ -1,0 +1,3 @@
+package android.provider; import android.content.ContentResolver; public final class Settings {
+ public static final class Global { public static boolean putInt(ContentResolver c,String k,int v){android.Rec.r("g:"+k+"="+v);return true;} public static boolean putString(ContentResolver c,String k,String v){android.Rec.r("g:"+k+"="+v);return true;} }
+ public static final class Secure { public static boolean putInt(ContentResolver c,String k,int v){android.Rec.r("s:"+k+"="+v);return true;} } }

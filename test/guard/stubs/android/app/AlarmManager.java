@@ -1,0 +1,2 @@
+package android.app; public class AlarmManager { public static final int ELAPSED_REALTIME_WAKEUP=2;
+ public void setExactAndAllowWhileIdle(int type,long t,PendingIntent pi){android.Rec.r("alarm:"+pi.action+":"+t);} public void cancel(PendingIntent pi){android.Rec.r("cancel:"+pi.action);} }

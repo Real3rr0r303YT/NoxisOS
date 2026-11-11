@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Noxis OS – local manifest für Nothing Phone (3a) "asteroids" auf LineageOS 24.0 -->
+<manifest>
+  <remote name="noxis-gh" fetch="https://github.com/" />
+  <remote name="angry" fetch="https://gitea.angry.im/" />
+
+  <!-- Gerät (crDroid-Asteroids-Team, LineageOS-kompatibel, Android 17) -->
+  <project path="device/nothing/asteroids"           name="crdroid-asteroids/device_nothing_asteroids"          remote="noxis-gh" revision="17" />
+  <project path="kernel/nothing/sm7635"              name="crdroid-asteroids/kernel_nothing_sm7635"             remote="noxis-gh" revision="17" clone-depth="1" />
+  <project path="kernel/nothing/sm7635-modules"      name="crdroid-asteroids/kernel_nothing_sm7635-modules"     remote="noxis-gh" revision="17" clone-depth="1" />
+  <project path="kernel/nothing/sm7635-devicetrees"  name="crdroid-asteroids/kernel_nothing_sm7635-devicetrees" remote="noxis-gh" revision="17" clone-depth="1" />
+  <project path="hardware/nothing"                   name="crdroid-asteroids/hardware_nothing"                  remote="noxis-gh" revision="17" />
+  <project path="hardware/dolby"                     name="crdroid-asteroids/hardware_dolby"                    remote="noxis-gh" revision="17" />
+  <project path="packages/apps/ParanoidGlyph"        name="crdroid-asteroids/packages_apps_ParanoidGlyph"       remote="noxis-gh" revision="17" />
+  <project path="packages/apps/GlyphAdapter"         name="crdroid-asteroids/packages_apps_GlyphAdapter"        remote="noxis-gh" revision="17" />
+
+  <!-- eSIM ohne Google: OpenEUICC -->
+  <project path="packages/apps/OpenEUICC"            name="PeterCxy/OpenEUICC"                       remote="angry" revision="master" sync-s="true" />
+  <project path="prebuilts/openeuicc-deps"           name="PeterCxy/android_prebuilts_openeuicc-deps" remote="angry" revision="master" clone-depth="1" />
+</manifest>

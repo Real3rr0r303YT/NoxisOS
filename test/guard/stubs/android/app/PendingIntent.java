@@ -1,0 +1,2 @@
+package android.app; public final class PendingIntent { public static final int FLAG_IMMUTABLE=1<<26; public static final int FLAG_UPDATE_CURRENT=1<<27; public String action;
+ public static PendingIntent getBroadcast(android.content.Context c,int rc,android.content.Intent i,int f){PendingIntent p=new PendingIntent();p.action=i.getAction();return p;} }

@@ -1,0 +1,1 @@
+package android.hardware.usb; public class UsbManager { public boolean enableUsbDataSignal(boolean e){android.Rec.r("usb:"+e);return true;} }

@@ -1,0 +1,5 @@
+runtime_resource_overlay {
+    name: "NoxisSystemUIOverlay",
+    certificate: "platform",
+    system_ext_specific: true,
+}

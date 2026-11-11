@@ -1,0 +1,2 @@
+package android.content; public class Intent { String a; public Intent(String a){this.a=a;}
+ public Intent setPackage(String p){return this;} public Intent setClass(Context c, Class<?> k){return this;} public String getAction(){return a;} }

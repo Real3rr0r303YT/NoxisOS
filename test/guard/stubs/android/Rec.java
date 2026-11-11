@@ -1,0 +1,1 @@
+package android; public final class Rec { public static final java.util.List<String> log=new java.util.ArrayList<>(); public static void r(String s){log.add(s);} }

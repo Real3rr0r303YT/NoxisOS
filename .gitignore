@@ -1,0 +1,6 @@
+out/
+*.zip
+!vendor/noxis/bootanimation/bootanimation.zip
+__pycache__/
+*.class
+vendor/nothing/

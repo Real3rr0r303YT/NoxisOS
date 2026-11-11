@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Schnelleinstellungen: Datenschutz-Schalter direkt sichtbar -->
+    <string name="quick_settings_tiles_default" translatable="false">internet,bt,flashlight,dnd,airplane,mictoggle,cameratoggle,location,rotation,hotspot,nfc,battery</string>
+</resources>

@@ -1,0 +1,6 @@
+prebuilt_etc {
+    name: "privapp-permissions-noxis.xml",
+    src: "privapp-permissions-noxis.xml",
+    sub_dir: "permissions",
+    system_ext_specific: true,
+}
