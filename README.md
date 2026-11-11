@@ -56,6 +56,19 @@ Full Nothing OS OTAs: <https://github.com/spike0en/nothing_archive>
 
 `NOXIS_KEEP_OUT=1` keeps `out/` (faster rebuilds), `NOXIS_CCACHE_SIZE=10G` shrinks the cache.
 
+## Own apps (Nothing design)
+
+The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. The **[Noxis apps](.github/workflows/noxis-apps.yml)** GitHub Action builds them from source every Monday (or on demand) and publishes them as the rolling release `noxis-apps` with `SHA256SUMS` and the source commit of each APK. `./noxis.sh apps` downloads them, checks every checksum and bundles them; `./noxis.sh sign` re-signs them with your own keys.
+
+| App in Noxis OS | Repository | Replaces |
+|---|---|---|
+| Calendar | [NothingCalendar](https://github.com/Real3rr0r303YT/NothingCalendar) | Etar |
+| Clock (alarm, timer, stopwatch) | [NothingClock](https://github.com/Real3rr0r303YT/NothingClock) | DeskClock |
+| Calculator | [Calculator](https://github.com/Real3rr0r303YT/Calculator) | ExactCalculator |
+| Notes | [NothingNotes](https://github.com/Real3rr0r303YT/NothingNotes) | – (added) |
+| Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added; set it as default phone app – the stock dialer stays for emergency calls) |
+| Battery | [NothingBattery](https://github.com/Real3rr0r303YT/NothingBattery) | – (added) |
+
 ## 1. Build manifest (`manifest/noxis.xml`)
 
 | Path | Repo | Branch |
@@ -106,7 +119,8 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 | Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | GrapheneOS Camera | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | PDF Viewer | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Gallery, Calculator, Clock, Notes | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Gallery, Calculator, Clock, Notes, Calendar, Battery | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| NothingCall (phone) | system (cellular) | | | | | ✗ |
 | Phone, SMS | system (cellular) | | | | | ✗ |
 | KernelSU manager | ✗ | ✗ | ✗ | ✗ | ✗ | – |
 | New apps | allow only when needed | | | | | ✗ |
@@ -146,6 +160,7 @@ Quick settings: microphone and camera toggles are visible by default.
 
 ```bash
 ./test/guard/run.sh                                          # 20 logic tests for Noxis Guard (JDK only)
+./test/test_own_apps.sh                                      # 17 tests: own apps download, SHA-256, overrides
 ./test/test_flow.sh <device-tree> <lineage/config> <tf.zip>  # 36 flow tests for noxis.sh
 python3 tools/gen_branding.py out/                            # logo, boot animation, wallpaper
 ```

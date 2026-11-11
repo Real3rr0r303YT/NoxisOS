@@ -173,8 +173,51 @@ EOF
   fi
 }
 
+# ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
+# name → LineageOS app it replaces (empty = added next to the stock app)
+NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
+NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery:"
+
+install_own_apps() {
+  local base="${NOXIS_APPS_URL:-https://github.com/$NOXIS_APPS_REPO/releases/download/noxis-apps}" tmp entry name over dir
+  tmp=$(mktemp -d)
+  if ! curl -fsSL -o "$tmp/SHA256SUMS" "$base/SHA256SUMS"; then
+    warn "noxis-apps release not found ($NOXIS_APPS_REPO) – run the 'Noxis apps' GitHub Action first"
+    rm -r "$tmp"; return 0
+  fi
+  curl -fsSL -o "$tmp/SOURCES" "$base/SOURCES" || : > "$tmp/SOURCES"
+  for entry in $NOXIS_OWN_APPS; do
+    name="${entry%%:*}"; over="${entry#*:}"
+    grep -q " $name.apk\$" "$tmp/SHA256SUMS" || { warn "$name: not in the release – skipped"; continue; }
+    c "$name ← $base/$name.apk"
+    curl -fsSL -o "$tmp/$name.apk" "$base/$name.apk" || { warn "$name: download failed – skipped"; continue; }
+    if ! ( cd "$tmp" && grep " $name.apk\$" SHA256SUMS | sha256sum -c --quiet - ); then
+      warn "$name: SHA-256 MISMATCH – skipped"; continue
+    fi
+    dir="$NOXIS/vendor/noxis/prebuilt/$name"; mkdir -p "$dir"
+    mv "$tmp/$name.apk" "$dir/$name.apk"
+    grep "^$name " "$tmp/SOURCES" > "$dir/SOURCE" || true
+    {
+      echo "android_app_import {"
+      echo "    name: \"$name\","
+      echo "    apk: \"$name.apk\","
+      echo "    // re-signed with the Noxis release key at sign time (noxis.sh sign)"
+      echo "    presigned: false,"
+      echo "    product_specific: true,"
+      [ -n "$over" ] && echo "    overrides: [\"$over\"],"
+      echo "    dex_preopt: {"
+      echo "        enabled: false,"
+      echo "    },"
+      echo "}"
+    } > "$dir/Android.bp"
+    c "  $name ok${over:+ (replaces $over)} – $(cut -d' ' -f2- "$dir/SOURCE" 2>/dev/null)"
+  done
+  rm -r "$tmp"
+}
+
 cmd_apps() {
   need curl "curl installieren"
+  install_own_apps
   install_apk GrapheneCamera    "$(gh_latest_asset GrapheneOS/Camera '\.apk$' || true)" false
   install_apk GraphenePdfViewer "$(gh_latest_asset GrapheneOS/PdfViewer '\.apk$' || true)" false
   install_fennec

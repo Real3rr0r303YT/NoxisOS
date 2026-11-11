@@ -1,0 +1,92 @@
+# Builds the Noxis system apps from 3rr0r's own repositories and publishes them as the
+# rolling release "noxis-apps" (APKs + SHA256SUMS). ./noxis.sh apps downloads, verifies and
+# bundles them into the ROM; the ROM build re-signs them with your own keys.
+name: Noxis apps
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"        # every Monday: pick up app updates
+  push:
+    paths:
+      - .github/workflows/noxis-apps.yml
+      - apps.list
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.app.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - { name: NoxisCalendar,   repo: Real3rr0r303YT/NothingCalendar }
+          - { name: NoxisClock,      repo: Real3rr0r303YT/NothingClock }
+          - { name: NoxisNotes,      repo: Real3rr0r303YT/NothingNotes }
+          - { name: NoxisCalculator, repo: Real3rr0r303YT/Calculator }
+          - { name: NoxisCall,       repo: Real3rr0r303YT/NothingCall }
+          - { name: NoxisBattery,    repo: Real3rr0r303YT/NothingBattery }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.app.repo }}
+          fetch-depth: 1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build release APK (falls back to debug)
+        run: |
+          chmod +x gradlew
+          if ./gradlew --no-daemon assembleRelease; then
+            apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n1)
+          else
+            echo "::warning::release build failed – using the debug build"
+            ./gradlew --no-daemon assembleDebug
+            apk=$(find app/build/outputs/apk/debug -name '*.apk' | head -n1)
+          fi
+          test -n "$apk"
+          mkdir -p out
+          cp "$apk" "out/${{ matrix.app.name }}.apk"
+          echo "${{ matrix.app.name }} ${{ matrix.app.repo }} $(git rev-parse HEAD)" > "out/${{ matrix.app.name }}.source"
+          sha256sum "out/${{ matrix.app.name }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app.name }}
+          path: out/*
+          retention-days: 7
+
+  release:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+          merge-multiple: true
+      - name: Checksums + source list
+        run: |
+          cd dl
+          ls *.apk >/dev/null
+          sha256sum *.apk > SHA256SUMS
+          cat *.source > SOURCES
+          cat SHA256SUMS SOURCES
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: noxis-apps
+          name: Noxis apps (rolling)
+          body: |
+            Noxis system apps built from source by GitHub Actions.
+            `SOURCES` lists the repository and commit of every APK, `SHA256SUMS` the checksums.
+            `./noxis.sh apps` downloads and verifies them; the ROM build re-signs them with your keys.
+          prerelease: true
+          make_latest: false
+          files: |
+            dl/*.apk
+            dl/SHA256SUMS
+            dl/SOURCES

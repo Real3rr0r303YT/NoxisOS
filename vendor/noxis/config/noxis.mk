@@ -42,6 +42,11 @@ ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/KernelSU/KernelSU.apk),)
 PRODUCT_PACKAGES += KernelSU
 endif
 
+# 3rr0r's own apps (Nothing design, built from source by the "Noxis apps" GitHub Action)
+# They replace LineageOS' calendar, clock and calculator; phone/notes/battery are added.
+NOXIS_OWN_APPS := NoxisCalendar NoxisClock NoxisCalculator NoxisNotes NoxisCall NoxisBattery
+PRODUCT_PACKAGES += $(foreach a,$(NOXIS_OWN_APPS),$(if $(wildcard $(NOXIS_PATH)/prebuilt/$(a)/$(a).apk),$(a)))
+
 # eSIM ohne Google
 NOXIS_ESIM ?= true
 ifeq ($(NOXIS_ESIM),true)
