@@ -10,9 +10,11 @@ PRODUCT_SYSTEM_EXT_PROPERTIES += \
     ro.noxis.version=$(NOXIS_VERSION) \
     ro.noxis.device=asteroids
 
-# Eigene OTA-Updates statt LineageOS-Server (JSON auf GitHub)
+# Own OTA updates instead of LineageOS servers: Settings → System → Updater reads this JSON,
+# downloads the OTA from the GitHub release and checks it against your release key
+# (OS + Nothing firmware: modem, bootloader, DSPs are part of every OTA)
 PRODUCT_SYSTEM_EXT_PROPERTIES += \
-    lineage.updater.uri=https://raw.githubusercontent.com/Real3rr0r303YT/noxis-ota/main/{device}.json
+    lineage.updater.uri=https://raw.githubusercontent.com/Real3rr0r303YT/NoxisOS/main/ota/{device}.json
 
 # ---------------- Apps ----------------
 PRODUCT_PACKAGES += \

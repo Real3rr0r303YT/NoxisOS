@@ -12,6 +12,7 @@
 #  ./noxis.sh sign               Signieren → OTA + Images → Desktop, out/ löschen
 #  ./noxis.sh cleanup            ROM auf den Desktop, out/ löschen (NOXIS_KEEP_OUT=1 behält)
 #  ./noxis.sh flash              Aufs Handy installieren (geführt, Bootloader bleibt offen)
+#  ./noxis.sh publish            OTA als GitHub-Release hochladen → Handy: Einstellungen → System → Updater
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
 # ============================================================
 set -euo pipefail
@@ -315,26 +316,67 @@ cmd_sign() {
   c "Fastboot-Images"
   img_from_target_files "$OUT/$name-target_files.zip" "$OUT/$name-img.zip"
   ( cd "$OUT" && sha256sum "$name-ota.zip" "$name-img.zip" > "$name.sha256" )
-  local size id
-  size=$(stat -c %s "$OUT/$name-ota.zip"); id=$(sha256sum "$OUT/$name-ota.zip" | cut -d' ' -f1)
-  cat > "$OUT/$DEVICE.json" <<EOF
+  write_ota_json "$OUT/$name-ota.zip" "noxis-$stamp" > "$OUT/$DEVICE.json"
+  c "Fertig in $OUT:"
+  ls -1 "$OUT" | sed 's,^,  ,'
+  cmd_cleanup
+}
+
+# ------------------------------------------------------------ OTA updates over GitHub
+NOXIS_GH_REPO="${NOXIS_GH_REPO:-Real3rr0r303YT/NoxisOS}"
+
+ota_timestamp() {  # build time of the OTA (the Updater only offers builds newer than the installed one)
+  local ts
+  ts=$(unzip -p "$1" META-INF/com/android/metadata 2>/dev/null | sed -n 's/^post-timestamp=//p' | head -n1)
+  [ -n "$ts" ] || ts=$(date -u -r "$1" +%s)
+  echo "$ts"
+}
+
+write_ota_json() {  # <ota.zip> <release tag>  → LineageOS Updater JSON on stdout
+  local ota="$1" tag="$2" file size id
+  file=$(basename "$ota"); size=$(stat -c %s "$ota"); id=$(sha256sum "$ota" | cut -d' ' -f1)
+  cat <<EOF
 {
   "response": [
     {
-      "datetime": $(date -u +%s),
-      "filename": "$name-ota.zip",
+      "datetime": $(ota_timestamp "$ota"),
+      "filename": "$file",
       "id": "$id",
       "romtype": "UNOFFICIAL",
       "size": $size,
-      "url": "https://github.com/Real3rr0r303YT/noxis-ota/releases/download/$stamp/$name-ota.zip",
+      "url": "https://github.com/$NOXIS_GH_REPO/releases/download/$tag/$file",
       "version": "24.0"
     }
   ]
 }
 EOF
-  c "Fertig in $OUT:"
-  ls -1 "$OUT" | sed 's,^,  ,'
-  cmd_cleanup
+}
+
+cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (read by the phone's Updater)
+  need gh "GitHub CLI installieren und 'gh auth login' ausführen"
+  need unzip "unzip installieren"
+  local ota desk tag json
+  desk="$(desktop_dir)"
+  ota=$(ls -t "$desk"/Noxis-*-"$DEVICE"-ota.zip "$OUT"/Noxis-*-"$DEVICE"-ota.zip 2>/dev/null | head -n1 || true)
+  [ -f "$ota" ] || die "Keine signierte OTA gefunden – erst ./noxis.sh sign"
+  [ "$(stat -c %s "$ota")" -lt 2147483648 ] || die "OTA größer als 2 GiB – GitHub-Releases erlauben max. 2 GiB pro Datei"
+  unzip -tq "$ota" >/dev/null || die "OTA-Zip beschädigt: $ota"
+  unzip -l "$ota" | grep -q "META-INF/com/android/otacert" || die "OTA ohne Signaturzertifikat – mit ./noxis.sh sign erzeugen"
+  tag="noxis-$(basename "$ota" | sed -n 's/^Noxis-[0-9.]*-\([0-9]\{8\}\)-.*/\1/p')"
+  [ "$tag" != noxis- ] || tag="noxis-$(date -u +%Y%m%d)"
+  if gh release view "$tag" -R "$NOXIS_GH_REPO" >/dev/null 2>&1; then tag="$tag-$(date -u +%H%M)"; fi
+  ( cd "$(dirname "$ota")" && sha256sum "$(basename "$ota")" ) > "$ota.sha256"
+  c "Release $tag ← $(basename "$ota") ($(du -h "$ota" | cut -f1))"
+  gh release create "$tag" "$ota" "$ota.sha256" -R "$NOXIS_GH_REPO" \
+    --title "Noxis OS ${tag#noxis-}" \
+    --notes "Signed OTA for the Nothing Phone (3a) (asteroids). Install: Settings → System → Updater, or adb sideload. SHA-256 in the .sha256 file."
+  mkdir -p "$NOXIS/ota"
+  json="$NOXIS/ota/$DEVICE.json"
+  write_ota_json "$ota" "$tag" > "$json"
+  git -C "$NOXIS" add "ota/$DEVICE.json"
+  git -C "$NOXIS" commit -qm "OTA: $(basename "$ota")"
+  git -C "$NOXIS" push -q origin HEAD
+  c "Veröffentlicht. Handy: Einstellungen → System → Updater → Nach Updates suchen"
 }
 
 # ------------------------------------------------------------ cleanup
@@ -437,7 +479,8 @@ case "${1:-}" in
   build)  cmd_build ;;
   sign)   cmd_sign ;;
   flash)  cmd_flash ;;
+  publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '2,16p' "$0" ;;
+  *) sed -n '2,17p' "$0" ;;
 esac

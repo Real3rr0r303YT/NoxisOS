@@ -42,7 +42,12 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
 ./noxis.sh build                    # user build
 ./noxis.sh sign                     # → ROM on the desktop, out/ is deleted
 ./noxis.sh flash                    # guided: fastboot + adb sideload
+./noxis.sh publish                  # signed OTA → GitHub release → phone updates itself
 ```
+
+### Updates from GitHub (Settings → System → Updater)
+
+`./noxis.sh publish` uploads the newest signed OTA as a release of this repository and writes [`ota/asteroids.json`](ota/). The phone's **Updater** (Settings → System → Updater) reads that file, downloads the OTA from the release, verifies it against **your** release key and installs it on the inactive slot (A/B, automatic rollback if it fails to boot). Every OTA contains the system and the Nothing firmware (modem, bootloader, DSPs), so firmware updates arrive the same way. Needs `gh auth login` once; GitHub allows up to 2 GiB per file.
 
 Full Nothing OS OTAs: <https://github.com/spike0en/nothing_archive>
 
@@ -161,6 +166,7 @@ Quick settings: microphone and camera toggles are visible by default.
 ```bash
 ./test/guard/run.sh                                          # 20 logic tests for Noxis Guard (JDK only)
 ./test/test_own_apps.sh                                      # 17 tests: own apps download, SHA-256, overrides
+./test/test_publish.sh                                       # 8 tests: OTA publishing + Updater JSON
 ./test/test_flow.sh <device-tree> <lineage/config> <tf.zip>  # 36 flow tests for noxis.sh
 python3 tools/gen_branding.py out/                            # logo, boot animation, wallpaper
 ```
