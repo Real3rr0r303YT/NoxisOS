@@ -25,4 +25,17 @@
     <string name="icon_style_sum">Off = Noxis letter tiles, on = the apps\' own icons</string>
     <string name="use_wallpaper">Use wallpaper</string>
     <string name="use_wallpaper_sum">Off = Noxis dark background with dot grid</string>
+    <string name="add_widget">Add widget</string>
+    <string name="noxis_widgets">Noxis widgets</string>
+    <string name="app_widgets">App widgets</string>
+    <string name="widget_battery">Battery</string>
+    <string name="widget_alarm">Alarm</string>
+    <string name="widget_storage">Storage</string>
+    <string name="no_alarm">NO ALARM</string>
+    <string name="storage_free">%1$s FREE</string>
+    <string name="bigger">Bigger</string>
+    <string name="smaller">Smaller</string>
+    <string name="remove">Remove</string>
+    <string name="change_wallpaper">Change wallpaper</string>
+    <string name="widget_failed">Could not add the widget</string>
 </resources>

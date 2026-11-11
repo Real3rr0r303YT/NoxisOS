@@ -25,11 +25,34 @@ class AppItem(
     val icon: Bitmap,
     val mono: Bitmap,       // white monochrome layer (Android 13+ themed icons) or a grayscale fallback
     val themed: Boolean,    // true = real monochrome layer, false = grayscale fallback
+    val tile: Bitmap,       // full-bleed square icon (adaptive layers without the system mask) – clipped by the UI
 )
 
 class Apps(private val ctx: Context) {
     private val la = ctx.getSystemService(LauncherApps::class.java)
     private val iconPx = (48 * ctx.resources.displayMetrics.density).toInt()
+    private val tilePx = (64 * ctx.resources.displayMetrics.density).toInt()
+
+    /** Adaptive icon drawn edge to edge (no circle/squircle mask), legacy icons centred on a dark plate. */
+    private fun fullBleed(d: Drawable): Bitmap {
+        val bmp = Bitmap.createBitmap(tilePx, tilePx, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        if (d is AdaptiveIconDrawable) {
+            // layers are 108 dp, the visible area is the inner 72 dp -> extend 25 % on each side
+            val pad = (tilePx * 0.25f).toInt()
+            for (layer in listOf(d.background, d.foreground)) {
+                layer ?: continue
+                layer.mutate().setBounds(-pad, -pad, tilePx + pad, tilePx + pad)
+                layer.draw(c)
+            }
+        } else {
+            c.drawColor(0xFF1B1B1B.toInt())
+            val inset = (tilePx * 0.14f).toInt()
+            d.mutate().setBounds(inset, inset, tilePx - inset, tilePx - inset)
+            d.draw(c)
+        }
+        return bmp
+    }
 
     fun load(): List<AppItem> =
         la.getActivityList(null, Process.myUserHandle())
@@ -43,7 +66,7 @@ class Apps(private val ctx: Context) {
         val m = monochrome(icon)
         return AppItem(
             AppKey(cn.flattenToShortString(), info.label.toString(), cn.packageName),
-            cn, info.user, bmp, m ?: grayscale(bmp), m != null,
+            cn, info.user, bmp, m ?: grayscale(bmp), m != null, fullBleed(icon),
         )
     }
 
@@ -111,11 +134,14 @@ class LauncherPrefs(ctx: Context) {
         get() = sp.getBoolean("clock24", true)
         set(v) = sp.edit().putBoolean("clock24", v).apply()
     var realIcons: Boolean
-        get() = sp.getBoolean("real_icons", false)
+        get() = sp.getBoolean("real_icons", true)
         set(v) = sp.edit().putBoolean("real_icons", v).apply()
     var wallpaper: Boolean
         get() = sp.getBoolean("wallpaper", false)
         set(v) = sp.edit().putBoolean("wallpaper", v).apply()
+    var widgets: List<WidgetSpec>
+        get() = WidgetSpec.decodeAll(Logic.decode(sp.getString("widgets", null)))
+        set(v) = sp.edit().putString("widgets", Logic.encode(v.map { it.encode() })).apply()
     var showHidden: Boolean
         get() = sp.getBoolean("show_hidden", false)
         set(v) = sp.edit().putBoolean("show_hidden", v).apply()

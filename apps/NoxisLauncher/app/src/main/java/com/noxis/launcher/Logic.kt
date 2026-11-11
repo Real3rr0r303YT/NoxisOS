@@ -75,6 +75,51 @@ object Logic {
     }
 }
 
+/** A home-screen widget: a system app widget (id) or a built-in Noxis widget (name). */
+data class WidgetSpec(val kind: Char, val ref: String, val heightDp: Int) {
+    val builtin get() = kind == 'b'
+    fun encode() = "$kind:$ref:$heightDp"
+
+    companion object {
+        const val MIN_H = 80
+        const val MAX_H = 480
+        const val STEP = 40
+        val BUILTINS = listOf("battery", "alarm", "storage")
+
+        fun decode(s: String): WidgetSpec? {
+            val p = s.split(':')
+            if (p.size != 3 || p[0].length != 1 || p[0][0] !in "wb") return null
+            val h = p[2].toIntOrNull() ?: return null
+            if (p[0] == "w" && p[1].toIntOrNull() == null) return null
+            if (p[0] == "b" && p[1] !in BUILTINS) return null
+            return WidgetSpec(p[0][0], p[1], h.coerceIn(MIN_H, MAX_H))
+        }
+
+        fun decodeAll(list: List<String>) = list.mapNotNull(::decode)
+
+        fun system(id: Int, minHeightDp: Int) = WidgetSpec('w', id.toString(), minHeightDp.coerceIn(MIN_H + 30, MAX_H))
+        fun builtin(name: String) = WidgetSpec('b', name, 150)
+
+        fun resize(w: WidgetSpec, steps: Int) = w.copy(heightDp = (w.heightDp + steps * STEP).coerceIn(MIN_H, MAX_H))
+
+        /** Layout rows: built-in widgets pair up two per row (Nothing style), system widgets get a full row. */
+        fun rows(list: List<WidgetSpec>): List<List<WidgetSpec>> {
+            val out = mutableListOf<List<WidgetSpec>>()
+            var pending: WidgetSpec? = null
+            for (w in list) {
+                if (w.builtin) {
+                    if (pending != null) { out += listOf(pending, w); pending = null } else pending = w
+                } else {
+                    pending?.let { out += listOf(it); pending = null }
+                    out += listOf(w)
+                }
+            }
+            pending?.let { out += listOf(it) }
+            return out
+        }
+    }
+}
+
 /** 5×7 dot-matrix glyphs for the home clock (1 = dot lit). */
 object DotFont {
     val glyphs: Map<Char, List<String>> = mapOf(
@@ -88,6 +133,8 @@ object DotFont {
         '7' to listOf("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
         '8' to listOf("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
         '9' to listOf("01110", "10001", "10001", "01111", "00001", "00010", "01100"),
+        '%' to listOf("11001", "11010", "00010", "00100", "01000", "01011", "10011"),
+        '-' to listOf("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
         ':' to listOf("0", "0", "1", "0", "1", "0", "0"),
         ' ' to listOf("0", "0", "0", "0", "0", "0", "0"),
     )

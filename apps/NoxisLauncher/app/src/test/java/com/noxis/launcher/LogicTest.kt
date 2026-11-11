@@ -108,4 +108,33 @@ class LogicTest {
         }
         assertEquals(5 + 1 + 5 + 1 + 1 + 1 + 5 + 1 + 5, DotFont.columns("12:34"))
     }
+
+    @Test fun widgetSpecRoundTrip() {
+        val w = WidgetSpec.system(42, 110)
+        assertEquals(w, WidgetSpec.decode(w.encode()))
+        assertEquals(WidgetSpec('b', "battery", 150), WidgetSpec.decode("b:battery:150"))
+        assertEquals(null, WidgetSpec.decode("b:evil:150"))
+        assertEquals(null, WidgetSpec.decode("w:x:150"))
+        assertEquals(null, WidgetSpec.decode("junk"))
+        assertEquals(WidgetSpec.MAX_H, WidgetSpec.decode("w:1:9999")!!.heightDp)
+    }
+
+    @Test fun widgetResizeClamped() {
+        val w = WidgetSpec.builtin("alarm")
+        assertEquals(190, WidgetSpec.resize(w, 1).heightDp)
+        assertEquals(WidgetSpec.MIN_H, WidgetSpec.resize(w, -10).heightDp)
+        assertEquals(WidgetSpec.MAX_H, WidgetSpec.resize(w, 100).heightDp)
+    }
+
+    @Test fun widgetRowsPairBuiltins() {
+        val b1 = WidgetSpec.builtin("battery"); val b2 = WidgetSpec.builtin("alarm"); val b3 = WidgetSpec.builtin("storage")
+        val s = WidgetSpec.system(7, 120)
+        assertEquals(listOf(listOf(b1, b2), listOf(s), listOf(b3)), WidgetSpec.rows(listOf(b1, b2, s, b3)))
+        assertEquals(listOf(listOf(b1), listOf(s)), WidgetSpec.rows(listOf(b1, s)))
+    }
+
+    @Test fun dotFontPercent() {
+        assertEquals(7, DotFont.glyphs.getValue('%').size)
+        assertEquals(5 + 1 + 5 + 1 + 5, DotFont.columns("53%"))
+    }
 }

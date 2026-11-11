@@ -1,6 +1,16 @@
 package com.noxis.launcher
 
 import android.app.role.RoleManager
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
+import android.widget.Toast
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as listItems
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.viewinterop.AndroidView
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,6 +20,9 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.Build
+import androidx.compose.runtime.key
+import androidx.core.graphics.drawable.toBitmap
 import android.os.Bundle
 import android.provider.MediaStore
 import android.provider.Settings
@@ -110,12 +123,90 @@ class MainActivity : ComponentActivity() {
     private var searchFocus by mutableStateOf(false)
     private var appsVersion by mutableIntStateOf(0)
 
+    // widgets
+    private lateinit var host: NoxisWidgetHost
+    private lateinit var awm: AppWidgetManager
+    private var widgets by mutableStateOf<List<WidgetSpec>>(emptyList())
+    private var widgetMenuFor by mutableStateOf<WidgetSpec?>(null)
+    private var pickerOpen by mutableStateOf(false)
+    private var pendingId = -1
+    private var pendingInfo: AppWidgetProviderInfo? = null
+
+    private fun saveWidgets(v: List<WidgetSpec>) { widgets = v; prefs.widgets = v }
+
+    private fun addBuiltin(name: String) = saveWidgets(widgets + WidgetSpec.builtin(name))
+
+    private fun addSystem(info: AppWidgetProviderInfo) {
+        val id = host.allocateAppWidgetId()
+        pendingId = id; pendingInfo = info
+        if (awm.bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null)) {
+            configureOrAdd()
+        } else {
+            val i = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, info.profile)
+            try { @Suppress("DEPRECATION") startActivityForResult(i, REQ_BIND) } catch (e: Exception) { failPending() }
+        }
+    }
+
+    private fun configureOrAdd() {
+        val info = pendingInfo ?: return failPending()
+        val optional = Build.VERSION.SDK_INT >= 28 &&
+            (info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL) != 0
+        if (info.configure != null && !optional) {
+            try { host.startAppWidgetConfigureActivityForResult(this, pendingId, 0, REQ_CONFIG, null) }
+            catch (e: Exception) { failPending() }
+        } else finishPending()
+    }
+
+    private fun finishPending() {
+        val info = pendingInfo ?: return
+        val minH = (info.minHeight / resources.displayMetrics.density).toInt()
+        saveWidgets(widgets + WidgetSpec.system(pendingId, minH))
+        pendingId = -1; pendingInfo = null
+    }
+
+    private fun failPending() {
+        if (pendingId != -1) host.deleteAppWidgetId(pendingId)
+        pendingId = -1; pendingInfo = null
+        Toast.makeText(this, R.string.widget_failed, Toast.LENGTH_SHORT).show()
+    }
+
+    fun removeWidget(w: WidgetSpec) {
+        if (!w.builtin) w.ref.toIntOrNull()?.let { host.deleteAppWidgetId(it) }
+        saveWidgets(widgets - w)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        if (pendingId == -1) return
+        when (requestCode) {
+            REQ_BIND -> if (resultCode == RESULT_OK) configureOrAdd() else failPending()
+            REQ_CONFIG -> if (resultCode == RESULT_OK) finishPending() else failPending()
+        }
+    }
+
+    override fun onStart() { super.onStart(); try { host.startListening() } catch (e: Exception) { } }
+    override fun onStop() { super.onStop(); try { host.stopListening() } catch (e: Exception) { } }
+
+    companion object {
+        private const val REQ_BIND = 11
+        private const val REQ_CONFIG = 12
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         apps = Apps(this)
         prefs = LauncherPrefs(this)
         callback = apps.watch { appsVersion++ }
+        awm = AppWidgetManager.getInstance(this)
+        host = NoxisWidgetHost(this).also { h -> h.onLongPress = { id -> widgetMenuFor = widgets.firstOrNull { it.ref == id.toString() && !it.builtin } } }
+        // forget widgets whose provider was uninstalled
+        widgets = prefs.widgets.filter { it.builtin || awm.getAppWidgetInfo(it.ref.toInt()) != null }
+        prefs.widgets = widgets
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Bg, surface = Surface)) {
                 LauncherScreen()
@@ -162,6 +253,7 @@ class MainActivity : ComponentActivity() {
         var showHidden by remember { mutableStateOf(prefs.showHidden) }
         var menuFor by remember { mutableStateOf<AppItem?>(null) }
         var settingsOpen by remember { mutableStateOf(false) }
+        var homeMenu by remember { mutableStateOf(false) }
 
         LaunchedEffect(appsVersion) {
             all = withContext(Dispatchers.IO) { apps.load() }
@@ -193,7 +285,8 @@ class MainActivity : ComponentActivity() {
                     onLaunch = launch, onLongPressApp = { menuFor = it },
                     onSearch = { openDrawer(true) },
                     onSwipeUp = { openDrawer(false) }, onSwipeDown = { expandNotifications() },
-                    onLongPressHome = { settingsOpen = true },
+                    onLongPressHome = { homeMenu = true },
+                    widgets = { status -> WidgetArea(status) },
                     onGuard = { startSafely(packageManager.getLaunchIntentForPackage(GUARD_PKG)) },
                     guardInstalled = packageManager.getLaunchIntentForPackage(GUARD_PKG) != null,
                 )
@@ -229,6 +322,32 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (homeMenu) {
+            NoxisDialog(title = "NOXIS", onDismiss = { homeMenu = false }) {
+                MenuRow(stringResource(R.string.add_widget)) { homeMenu = false; pickerOpen = true }
+                MenuRow(stringResource(R.string.change_wallpaper)) {
+                    homeMenu = false
+                    wallpaper = true; prefs.wallpaper = true
+                    startSafely(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), null))
+                }
+                MenuRow(stringResource(R.string.settings)) { homeMenu = false; settingsOpen = true }
+            }
+        }
+
+        if (pickerOpen) WidgetPicker()
+
+        widgetMenuFor?.let { w ->
+            NoxisDialog(title = "WIDGET", onDismiss = { widgetMenuFor = null }) {
+                MenuRow(stringResource(R.string.bigger)) {
+                    saveWidgets(widgets.map { if (it == w) WidgetSpec.resize(it, 1) else it }); widgetMenuFor = null
+                }
+                MenuRow(stringResource(R.string.smaller)) {
+                    saveWidgets(widgets.map { if (it == w) WidgetSpec.resize(it, -1) else it }); widgetMenuFor = null
+                }
+                MenuRow(stringResource(R.string.remove)) { removeWidget(w); widgetMenuFor = null }
+            }
+        }
+
         if (settingsOpen) {
             NoxisDialog(title = stringResource(R.string.settings), onDismiss = { settingsOpen = false }) {
                 SwitchRow(stringResource(R.string.icon_style), stringResource(R.string.icon_style_sum), realIcons) {
@@ -247,9 +366,93 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    private fun WidgetArea(status: SysStatus) {
+        val shape = RoundedCornerShape(26.dp)
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            WidgetSpec.rows(widgets).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { w -> key(w.kind, w.ref) {
+                        val m = Modifier.weight(1f).height(w.heightDp.dp).clip(shape)
+                        if (w.builtin) {
+                            BuiltinWidget(w.ref, status.battery, status.charging,
+                                m.background(Surface).border(1.dp, Line, shape)
+                                    .combinedClickable(onClick = {}, onLongClick = { widgetMenuFor = w }))
+                        } else {
+                            val id = w.ref.toInt()
+                            val full = row.size == 1
+                            AndroidView(
+                                modifier = m,
+                                factory = { ctx ->
+                                    (host.createView(ctx, id, awm.getAppWidgetInfo(id)) as NoxisWidgetView)
+                                },
+                                update = { v ->
+                                    val wDp = (resources.configuration.screenWidthDp - 40) / (if (full) 1 else 2)
+                                    v.setSizeDp(wDp, w.heightDp)
+                                },
+                            )
+                        }
+                    } }
+                    if (row.size == 1 && row[0].builtin) Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    private fun WidgetPicker() {
+        val providers = remember {
+            awm.getInstalledProvidersForProfile(android.os.Process.myUserHandle())
+                .filter { (it.widgetCategory and AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN) != 0 }
+                .sortedBy { it.loadLabel(packageManager).lowercase() }
+        }
+        val names = mapOf("battery" to R.string.widget_battery, "alarm" to R.string.widget_alarm, "storage" to R.string.widget_storage)
+        NoxisDialog(title = stringResource(R.string.add_widget).uppercase(), onDismiss = { pickerOpen = false }) {
+            LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item {
+                    Text(stringResource(R.string.noxis_widgets).uppercase(), color = Accent, fontFamily = Mono, fontSize = 12.sp,
+                        letterSpacing = 2.sp, modifier = Modifier.padding(vertical = 8.dp))
+                }
+                listItems(WidgetSpec.BUILTINS) { b ->
+                    MenuRow(stringResource(names.getValue(b))) { pickerOpen = false; addBuiltin(b) }
+                }
+                item {
+                    Text(stringResource(R.string.app_widgets).uppercase(), color = Accent, fontFamily = Mono, fontSize = 12.sp,
+                        letterSpacing = 2.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                }
+                listItems(providers) { p ->
+                    val app = remember(p) {
+                        try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p.provider.packageName, 0)).toString() }
+                        catch (e: Exception) { p.provider.packageName }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .combinedClickable(onClick = { pickerOpen = false; addSystem(p) })
+                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val icon = remember(p) {
+                            try { p.loadIcon(this@MainActivity, resources.displayMetrics.densityDpi)
+                                ?.toBitmap(96, 96) } catch (e: Exception) { null }
+                        }
+                        if (icon != null) Image(icon.asImageBitmap(), null, Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(p.loadLabel(packageManager), color = Ink, fontSize = 15.sp)
+                            Text(app, color = Muted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /* ------------------------------------------------------------------ background */
+
 
 @Composable
 private fun NoxisBackground(wallpaper: Boolean) {
@@ -277,7 +480,7 @@ private fun NoxisBackground(wallpaper: Boolean) {
 
 /* ------------------------------------------------------------------ home */
 
-private data class SysStatus(val battery: Int?, val charging: Boolean, val net: List<String>)
+data class SysStatus(val battery: Int?, val charging: Boolean, val net: List<String>)
 
 @Composable
 private fun rememberStatus(): SysStatus {
@@ -314,6 +517,7 @@ private fun HomeScreen(
     onLaunch: (AppItem) -> Unit, onLongPressApp: (AppItem) -> Unit, onSearch: () -> Unit,
     onSwipeUp: () -> Unit, onSwipeDown: () -> Unit, onLongPressHome: () -> Unit,
     onGuard: () -> Unit, guardInstalled: Boolean,
+    widgets: @Composable (SysStatus) -> Unit,
 ) {
     var now by remember { mutableStateOf(Calendar.getInstance()) }
     LaunchedEffect(Unit) {
@@ -377,7 +581,8 @@ private fun HomeScreen(
             Spacer(Modifier.width(14.dp))
             Text(stringResource(R.string.search_home), color = Muted, fontSize = 16.sp)
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(14.dp))
+        Box(Modifier.weight(1f).fillMaxWidth()) { widgets(status) }
         // home apps: 2 rows of 4
         pinned.chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -457,8 +662,7 @@ private fun AppTile(
             contentAlignment = Alignment.Center,
         ) {
             if (realIcons) {
-                val bmp = if (item.themed) item.mono else item.icon
-                Image(bmp.asImageBitmap(), item.key.label, Modifier.size(if (item.themed) 50.dp else 42.dp))
+                Image(item.tile.asImageBitmap(), item.key.label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             } else {
                 Text(Logic.monogram(item.key.label), color = Ink, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = 24.sp)
                 Box(Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 9.dp).size(7.dp).clip(CircleShape).background(Accent))
