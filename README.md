@@ -73,6 +73,9 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | Notes | [NothingNotes](https://github.com/Real3rr0r303YT/NothingNotes) | – (added) |
 | Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added; set it as default phone app – the stock dialer stays for emergency calls) |
 | Battery | [NothingBattery](https://github.com/Real3rr0r303YT/NothingBattery) | – (added) |
+| **Home screen** | [NoxisLauncher](apps/NoxisLauncher) (in this repo) | – (added; pick it once as home app – Trebuchet stays for recents/gestures) |
+
+**NoxisLauncher:** dot-matrix clock, date, Noxis Guard shortcut, up to 6 pinned apps · swipe up = app drawer with search (also initials and package names) · swipe down = notifications · long press = launcher settings · long press an app = pin, hide, app info, uninstall · white monochrome icons in Nothing style · no internet permission.
 
 ## 1. Build manifest (`manifest/noxis.xml`)
 
