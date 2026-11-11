@@ -39,11 +39,21 @@ class LogicTest {
 
     @Test fun pinToggleAndLimit() {
         var p = emptyList<String>()
-        for (i in 1..8) p = Logic.togglePin(p, "k$i")
+        for (i in 1..20) p = Logic.togglePin(p, "k$i")
         assertEquals(Logic.MAX_PINNED, p.size)
-        assertEquals("k8", p.last())
-        assertEquals(p - "k5", Logic.togglePin(p, "k5"))
+        assertEquals("k20", p.last())
+        assertEquals(p - "k10", Logic.togglePin(p, "k10"))
     }
+
+    @Test fun dockLimitIsFour() {
+        var d = emptyList<String>()
+        for (i in 1..6) d = Logic.togglePin(d, "d$i", Logic.MAX_DOCK)
+        assertEquals(listOf("d3", "d4", "d5", "d6"), d)
+    }
+
+    @Test fun defaultDockSkipsMissingAndDuplicates() =
+        assertEquals(listOf("phone", "browser", "camera"),
+            Logic.defaultDock(listOf("phone", null, "phone", "gone", "browser", "camera"), setOf("phone", "browser", "camera")))
 
     @Test fun encodeDecodeRoundTrip() {
         val l = listOf("com.a/.Main", "com.b/.X")

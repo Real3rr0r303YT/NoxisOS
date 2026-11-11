@@ -4,13 +4,15 @@
     <string name="search">Search apps</string>
     <string name="pin">Add to home</string>
     <string name="unpin">Remove from home</string>
+    <string name="dock_add">Add to dock</string>
+    <string name="dock_remove">Remove from dock</string>
     <string name="app_info">App info</string>
     <string name="uninstall">Uninstall</string>
     <string name="hide">Hide</string>
     <string name="unhide">Show again</string>
     <string name="settings">Launcher settings</string>
     <string name="mono_icons">Monochrome icons</string>
-    <string name="mono_icons_sum">Nothing-style white icons (apps with a monochrome layer)</string>
+    <string name="mono_icons_sum">Nothing style: white icons where apps support it, black and white for all others</string>
     <string name="clock_24h">24-hour clock</string>
     <string name="show_hidden">Show hidden apps</string>
     <string name="guard">Noxis Guard</string>

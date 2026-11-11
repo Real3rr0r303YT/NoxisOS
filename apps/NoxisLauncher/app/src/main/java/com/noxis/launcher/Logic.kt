@@ -7,7 +7,8 @@ import java.util.Locale
 data class AppKey(val key: String, val label: String, val pkg: String)
 
 object Logic {
-    const val MAX_PINNED = 6
+    const val MAX_PINNED = 16   // home grid 4×4
+    const val MAX_DOCK = 4
 
     fun normalize(s: String): String =
         Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase(Locale.ROOT).trim()
@@ -36,8 +37,12 @@ object Logic {
     }
 
     /** Pin/unpin keeping order; at most MAX_PINNED apps on the home screen. */
-    fun togglePin(pinned: List<String>, key: String): List<String> =
-        if (key in pinned) pinned - key else (pinned + key).takeLast(MAX_PINNED)
+    fun togglePin(pinned: List<String>, key: String, max: Int = MAX_PINNED): List<String> =
+        if (key in pinned) pinned - key else (pinned + key).takeLast(max)
+
+    /** First-run dock: default phone, messages, browser, camera (whatever exists, no duplicates). */
+    fun defaultDock(candidates: List<String?>, existing: Set<String>): List<String> =
+        candidates.filterNotNull().filter { it in existing }.distinct().take(MAX_DOCK)
 
     fun encode(list: List<String>): String = list.joinToString("|")
     fun decode(s: String?): List<String> = s?.split('|')?.filter { it.isNotBlank() } ?: emptyList()

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.LauncherApps
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -130,6 +131,7 @@ class MainActivity : ComponentActivity() {
     private fun LauncherScreen() {
         var all by remember { mutableStateOf<List<AppItem>>(emptyList()) }
         var pinned by remember { mutableStateOf(prefs.pinned) }
+        var dock by remember { mutableStateOf(prefs.dock) }
         var hidden by remember { mutableStateOf(prefs.hidden) }
         var mono by remember { mutableStateOf(prefs.mono) }
         var clock24 by remember { mutableStateOf(prefs.clock24) }
@@ -141,6 +143,17 @@ class MainActivity : ComponentActivity() {
             all = withContext(Dispatchers.IO) { apps.load() }
             val keys = all.map { it.key.key }.toSet()
             pinned = Logic.prune(pinned, keys).also { prefs.pinned = it }
+            if (!prefs.dockSet && all.isNotEmpty()) {
+                val firstKeyOf = { pkg: String? -> all.firstOrNull { it.key.pkg == pkg }?.key?.key }
+                dock = Logic.defaultDock(listOf(
+                    firstKeyOf(apps.defaultPackage(Intent(Intent.ACTION_DIAL))),
+                    firstKeyOf(apps.defaultPackage(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MESSAGING))),
+                    firstKeyOf(apps.defaultPackage(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.org")))),
+                    firstKeyOf(apps.defaultPackage(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))),
+                ), keys).also { prefs.dock = it }
+            } else {
+                dock = Logic.prune(dock, keys).also { if (prefs.dockSet) prefs.dock = it }
+            }
             hidden = Logic.prune(hidden.toList(), keys).toSet().also { prefs.hidden = it }
         }
 
@@ -152,14 +165,17 @@ class MainActivity : ComponentActivity() {
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(Color(0x66000000), Color(0x22000000), Color(0x99000000))))
         ) {
-            HomeScreen(
-                pinned = pinned.mapNotNull(byKey::get), mono = mono, clock24 = clock24,
-                onLaunch = launch, onLongPressApp = { menuFor = it },
-                onSwipeUp = { drawerOpen = true }, onSwipeDown = { expandNotifications() },
-                onLongPressHome = { settingsOpen = true },
-                onGuard = { startSafely(packageManager.getLaunchIntentForPackage(GUARD_PKG)) },
-                guardInstalled = packageManager.getLaunchIntentForPackage(GUARD_PKG) != null,
-            )
+            AnimatedVisibility(visible = !drawerOpen, enter = fadeIn(), exit = fadeOut()) {
+                HomeScreen(
+                    pinned = pinned.mapNotNull(byKey::get), dock = dock.mapNotNull(byKey::get),
+                    mono = mono, clock24 = clock24,
+                    onLaunch = launch, onLongPressApp = { menuFor = it },
+                    onSwipeUp = { drawerOpen = true }, onSwipeDown = { expandNotifications() },
+                    onLongPressHome = { settingsOpen = true },
+                    onGuard = { startSafely(packageManager.getLaunchIntentForPackage(GUARD_PKG)) },
+                    guardInstalled = packageManager.getLaunchIntentForPackage(GUARD_PKG) != null,
+                )
+            }
             AnimatedVisibility(
                 visible = drawerOpen,
                 enter = slideInVertically { it / 3 } + fadeIn(),
@@ -181,6 +197,9 @@ class MainActivity : ComponentActivity() {
                     Column {
                         MenuRow(stringResource(if (k in pinned) R.string.unpin else R.string.pin)) {
                             pinned = Logic.togglePin(pinned, k).also { prefs.pinned = it }; menuFor = null
+                        }
+                        MenuRow(stringResource(if (k in dock) R.string.dock_remove else R.string.dock_add)) {
+                            dock = Logic.togglePin(dock, k, Logic.MAX_DOCK).also { prefs.dock = it }; menuFor = null
                         }
                         MenuRow(stringResource(if (k in hidden) R.string.unhide else R.string.hide)) {
                             hidden = (if (k in hidden) hidden - k else hidden + k).also { prefs.hidden = it }; menuFor = null
@@ -222,7 +241,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomeScreen(
-    pinned: List<AppItem>, mono: Boolean, clock24: Boolean,
+    pinned: List<AppItem>, dock: List<AppItem>, mono: Boolean, clock24: Boolean,
     onLaunch: (AppItem) -> Unit, onLongPressApp: (AppItem) -> Unit,
     onSwipeUp: () -> Unit, onSwipeDown: () -> Unit, onLongPressHome: () -> Unit,
     onGuard: () -> Unit, guardInstalled: Boolean,
@@ -253,7 +272,7 @@ private fun HomeScreen(
                 interactionSource = null),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(72.dp))
+        Spacer(Modifier.height(48.dp))
         DotClock(Logic.clock(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), clock24))
         Spacer(Modifier.height(14.dp))
         Text(DateFormat.getDateInstance(DateFormat.FULL).format(Date(now.timeInMillis)),
@@ -273,14 +292,31 @@ private fun HomeScreen(
                 Text(stringResource(R.string.guard), color = Ink, fontSize = 13.sp)
             }
         }
+        Spacer(Modifier.height(28.dp))
+        // home grid: 4 columns, up to 16 apps (long press in the drawer → "Add to home")
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            pinned.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    row.forEach { AppCell(it, mono, showLabel = true, onClick = onLaunch, onLongClick = onLongPressApp) }
+                    repeat(4 - row.size) { Spacer(Modifier.width(84.dp)) }
+                }
+            }
+        }
         Spacer(Modifier.weight(1f))
-        Text(stringResource(R.string.home_hint), color = Ink.copy(alpha = 0.4f), fontSize = 12.sp)
-        Spacer(Modifier.height(16.dp))
+        if (pinned.isEmpty()) {
+            Text(stringResource(R.string.home_hint), color = Ink.copy(alpha = 0.45f), fontSize = 12.sp)
+            Spacer(Modifier.height(12.dp))
+        }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .background(Color(0x55000000))
+                .padding(vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            pinned.forEach { AppCell(it, mono, showLabel = false, onClick = onLaunch, onLongClick = onLongPressApp) }
+            dock.forEach { AppCell(it, mono, showLabel = false, onClick = onLaunch, onLongClick = onLongPressApp) }
         }
     }
 }
@@ -316,11 +352,12 @@ private fun AppCell(
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        val monoBmp = item.mono
-        if (mono && monoBmp != null) {
+        if (mono && item.themed) {
             Box(Modifier.size(54.dp).clip(CircleShape).background(Color(0x33FFFFFF)), Alignment.Center) {
-                Image(monoBmp.asImageBitmap(), item.key.label, Modifier.size(54.dp))
+                Image(item.mono.asImageBitmap(), item.key.label, Modifier.size(54.dp))
             }
+        } else if (mono) {
+            Image(item.mono.asImageBitmap(), item.key.label, Modifier.size(54.dp))
         } else {
             Image(item.icon.asImageBitmap(), item.key.label, Modifier.size(54.dp))
         }
@@ -344,7 +381,7 @@ private fun Drawer(
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color(0xF207070B))
+            .background(Color(0xFF07070B))
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()

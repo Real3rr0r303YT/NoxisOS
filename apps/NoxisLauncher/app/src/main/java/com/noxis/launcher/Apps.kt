@@ -7,6 +7,9 @@ import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -20,7 +23,8 @@ class AppItem(
     val component: ComponentName,
     val user: UserHandle,
     val icon: Bitmap,
-    val mono: Bitmap?,      // white monochrome layer (Android 13+ themed icons) or null
+    val mono: Bitmap,       // white monochrome layer (Android 13+ themed icons) or a grayscale fallback
+    val themed: Boolean,    // true = real monochrome layer, false = grayscale fallback
 )
 
 class Apps(private val ctx: Context) {
@@ -35,11 +39,11 @@ class Apps(private val ctx: Context) {
     private fun toItem(info: LauncherActivityInfo): AppItem {
         val cn = info.componentName
         val icon = info.getIcon(0)
+        val bmp = icon.toBitmap(iconPx, iconPx)
+        val m = monochrome(icon)
         return AppItem(
             AppKey(cn.flattenToShortString(), info.label.toString(), cn.packageName),
-            cn, info.user,
-            icon.toBitmap(iconPx, iconPx),
-            monochrome(icon),
+            cn, info.user, bmp, m ?: grayscale(bmp), m != null,
         )
     }
 
@@ -55,6 +59,19 @@ class Apps(private val ctx: Context) {
         m.draw(c)
         return bmp
     }
+
+    private fun grayscale(src: Bitmap): Bitmap {
+        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        p.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
+        Canvas(out).drawBitmap(src, 0f, 0f, p)
+        return out
+    }
+
+    /** Package of the default app for an intent (dialer, SMS, browser, camera), if any. */
+    fun defaultPackage(i: android.content.Intent): String? =
+        ctx.packageManager.resolveActivity(i, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName?.takeIf { it != "android" }
 
     fun launch(item: AppItem) = la.startMainActivity(item.component, item.user, null, null)
     fun details(item: AppItem) = la.startAppDetailsActivity(item.component, item.user, null, null)
@@ -80,6 +97,10 @@ class LauncherPrefs(ctx: Context) {
     var pinned: List<String>
         get() = Logic.decode(sp.getString("pinned", null))
         set(v) = sp.edit().putString("pinned", Logic.encode(v)).apply()
+    var dock: List<String>
+        get() = Logic.decode(sp.getString("dock", null))
+        set(v) = sp.edit().putString("dock", Logic.encode(v)).putBoolean("dock_set", true).apply()
+    val dockSet: Boolean get() = sp.getBoolean("dock_set", false)
     var hidden: Set<String>
         get() = Logic.decode(sp.getString("hidden", null)).toSet()
         set(v) = sp.edit().putString("hidden", Logic.encode(v.toList())).apply()

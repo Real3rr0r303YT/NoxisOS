@@ -5,13 +5,15 @@
     <string name="search">Apps suchen</string>
     <string name="pin">Zum Startbildschirm</string>
     <string name="unpin">Vom Startbildschirm entfernen</string>
+    <string name="dock_add">Ins Dock</string>
+    <string name="dock_remove">Aus dem Dock entfernen</string>
     <string name="app_info">App-Info</string>
     <string name="uninstall">Deinstallieren</string>
     <string name="hide">Ausblenden</string>
     <string name="unhide">Wieder anzeigen</string>
     <string name="settings">Launcher-Einstellungen</string>
     <string name="mono_icons">Einfarbige Symbole</string>
-    <string name="mono_icons_sum">Weiße Symbole im Nothing-Stil (Apps mit Monochrom-Ebene)</string>
+    <string name="mono_icons_sum">Nothing-Stil: weiße Symbole, wo Apps das unterstützen, sonst schwarz-weiß</string>
     <string name="clock_24h">24-Stunden-Uhr</string>
     <string name="show_hidden">Ausgeblendete Apps zeigen</string>
     <string name="default_home">Als Standard-Startbildschirm festlegen</string>
