@@ -9,6 +9,7 @@
 #  ./noxis.sh blobs <ota.zip>    Herstellerdateien aus Nothing-OS-OTA ziehen
 #  ./noxis.sh keys               Eigene Signaturschlüssel
 #  ./noxis.sh build              Kompilieren (user-Build, KernelSU im Kernel)
+#  ./noxis.sh opsec              Gebautes Image gegen die OPSEC-Regeln prüfen
 #  ./noxis.sh sign               Signieren → OTA + Images → Desktop, out/ löschen
 #  ./noxis.sh cleanup            ROM auf den Desktop, out/ löschen (NOXIS_KEEP_OUT=1 behält)
 #  ./noxis.sh flash              Aufs Handy installieren (geführt, Bootloader bleibt offen)
@@ -293,7 +294,19 @@ cmd_build() {
   [ -n "$CCACHE_EXEC" ] && ccache -M "${NOXIS_CCACHE_SIZE:-25G}" >/dev/null
   c "Baue Noxis OS ($DEVICE-$VARIANT) – das dauert"
   mka target-files-package otatools
-  c "Build fertig. Weiter: ./noxis.sh sign"
+  c "Build fertig."
+  cmd_opsec || die "OPSEC-Prüfung fehlgeschlagen – siehe oben"
+  c "Weiter: ./noxis.sh sign"
+}
+
+# ------------------------------------------------------------ opsec
+# Prüft das gebaute Image gegen die Noxis-Regeln. Die Gerätebäume kommen von
+# fremden Projekten und ändern sich; was dort hereinkommt, soll hier auffallen
+# und nicht erst auf dem Handy.
+cmd_opsec() {
+  local prod="$SRC/out/target/product/$DEVICE"
+  [ -d "$prod" ] || die "Nichts gebaut – erst ./noxis.sh build"
+  "$NOXIS/tools/opsec-verify.sh" "$prod"
 }
 
 # ------------------------------------------------------------ sign
@@ -473,6 +486,7 @@ cmd_all() {
 
 case "${1:-}" in
   check)  cmd_check ;;
+  opsec)  cmd_opsec ;;
   sync)   cmd_sync ;;
   vendor) cmd_vendor ;;
   apps)   cmd_apps ;;
