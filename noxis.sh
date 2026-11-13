@@ -50,8 +50,23 @@ cmd_check() {
   disk=$(df -BG --output=avail "$(dirname "$SRC")" | tail -1 | tr -dc 0-9)
   c "RAM: ${ram} GB (empfohlen 32+, mit 16 GB nur mit 32 GB Swap)"
   c "Freier Platz bei $(dirname "$SRC"): ${disk} GB (nötig ~400 GB)"
-  [ "$ram" -lt 16 ] && warn "Zu wenig RAM für einen Android-Build"
-  [ "$disk" -lt 350 ] && warn "Zu wenig Platz"
+  local swap
+  swap=$(awk '/SwapTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
+  c "Swap: ${swap} GB"
+  if [ "$ram" -lt 24 ]; then
+    warn "Wenig RAM. Der Bau laeuft trotzdem, aber mit $(( ram / 4 )) statt $(nproc) Jobs und entsprechend langsam."
+    [ $(( ram + swap )) -lt 32 ] && warn "RAM + Swap unter 32 GB – einzelne Uebersetzer koennen abgeschossen werden.
+       Swapdatei anlegen:
+         sudo fallocate -l 32G /swapfile && sudo chmod 600 /swapfile
+         sudo mkswap /swapfile && sudo swapon /swapfile"
+  fi
+  if [ "$disk" -lt 350 ]; then
+    warn "Zu wenig Platz: ${disk} GB da, etwa 400 GB noetig (110 GB Quellcode, Rest out/ und ccache).
+       Das bricht erst nach Stunden ab. Was am meisten belegt:
+         sudo du -sh /var/lib/docker ~/Desktop/noxis-linux ~/noxis-backup 2>/dev/null
+       Docker-Volume vom Linux-Bau loeschen (wird beim naechsten Bau neu geholt):
+         sudo docker volume rm noxis-kernel && sudo docker system prune -af"
+  fi
   for t in git git-lfs python3 curl zip unzip openssl ccache fastboot adb; do
     command -v "$t" >/dev/null && echo "  ✓ $t" || echo "  ✗ $t"
   done
@@ -292,8 +307,17 @@ cmd_build() {
   envsetup
   export USE_CCACHE=1 CCACHE_EXEC="$(command -v ccache || true)"
   [ -n "$CCACHE_EXEC" ] && ccache -M "${NOXIS_CCACHE_SIZE:-25G}" >/dev/null
-  c "Baue Noxis OS ($DEVICE-$VARIANT) – das dauert"
-  mka target-files-package otatools
+  # Ohne Begrenzung startet mka so viele Übersetzer, wie Kerne da sind. Jeder
+  # davon braucht Speicher; auf einem Rechner mit wenig RAM endet das im
+  # OOM-Killer, meist nach Stunden. Darum: ein Job je 4 GB RAM.
+  local ram jobs
+  ram=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
+  jobs="${NOXIS_JOBS:-$(( ram / 4 ))}"
+  [ "$jobs" -lt 2 ] && jobs=2
+  [ "$jobs" -gt "$(nproc)" ] && jobs=$(nproc)
+  c "Baue Noxis OS ($DEVICE-$VARIANT) mit $jobs Jobs (${ram} GB RAM) – das dauert"
+  [ "$ram" -lt 24 ] && warn "Wenig RAM: rechne mit vielen Stunden. Mehr Jobs: NOXIS_JOBS=n"
+  mka -j"$jobs" target-files-package otatools
   c "Build fertig."
   cmd_opsec || die "OPSEC-Prüfung fehlgeschlagen – siehe oben"
   c "Weiter: ./noxis.sh sign"
