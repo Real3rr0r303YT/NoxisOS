@@ -85,9 +85,28 @@ EOF
 }
 
 # ------------------------------------------------------------ sync
+# Platz dort pruefen, wo wirklich gebaut wird. Ein Android-Bau laeuft stunden-
+# bis tagelang; wenn die Platte dabei volllaeuft, ist die ganze Zeit verloren.
+# Lieber hier abbrechen. NOXIS_SRC zeigt auf eine andere Platte, wenn die
+# Systemplatte zu klein ist.
+need_space() {  # $1 = Pfad, $2 = noetige GB, $3 = wofuer
+  local free
+  mkdir -p "$1" 2>/dev/null || true
+  free=$(df -BG --output=avail "$1" 2>/dev/null | tail -1 | tr -dc 0-9)
+  [ -n "$free" ] || return 0
+  if [ "$free" -lt "$2" ]; then
+    die "Zu wenig Platz fuer $3: $free GB frei unter $1, noetig etwa $2 GB.
+       Andere Platte nehmen:  export NOXIS_SRC=/pfad/zur/platte/noxis-src
+       Belegung ansehen:      du -xh --max-depth=1 \$HOME | sort -rh | head
+       Pruefung uebergehen:   NOXIS_SKIP_SPACE=1 (auf eigenes Risiko)"
+  fi
+  c "Platz unter $1: $free GB frei"
+}
+
 cmd_sync() {
   need repo "siehe ./noxis.sh check"
   need git-lfs "git-lfs installieren"
+  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$(dirname "$SRC")" 150 "den Quellcode"
   mkdir -p "$SRC" && cd "$SRC"
   if [ ! -d .repo ]; then
     c "LineageOS $BRANCH initialisieren"
@@ -303,6 +322,8 @@ apex_keys() {  # <target_files.zip>
 # ------------------------------------------------------------ build
 cmd_build() {
   [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Erst ./noxis.sh blobs <ota.zip>"
+  # out/ waechst beim Bauen auf ueber 100 GB.
+  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" 130 "out/ (das Bauen selbst)"
   cmd_vendor
   envsetup
   export USE_CCACHE=1 CCACHE_EXEC="$(command -v ccache || true)"
