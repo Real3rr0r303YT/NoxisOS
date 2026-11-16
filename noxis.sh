@@ -356,8 +356,20 @@ cmd_blobs() {
     log=$(mktemp); liste="$SRC/device/nothing/$DEVICE/proprietary-files.txt"
     while [ "$versuch" -le 3 ]; do
       ./extract-files.py --regenerate "$ota" 2>&1 | tee "$log" || true
-      fehlend=$(sed -n 's/^\(.*\): file not found$/\1/p' "$log" | sort -u)
-      [ -n "$fehlend" ] || break
+      # Farbcodes und Wagenruecklauf vorher abziehen: extract-files.py faerbt
+      # Fehlerzeilen ein, und dann passt ein Muster mit '^' und '$' nicht.
+      fehlend=$(sed 's/\x1b\[[0-9;]*[A-Za-z]//g; s/\r$//' "$log" \
+                | sed -n 's/^[[:space:]]*\(.*[^[:space:]]\):[[:space:]]*file not found[[:space:]]*$/\1/p' \
+                | sort -u)
+      if [ -z "$fehlend" ]; then
+        # Abgebrochen, aber nichts erkannt: zeigen, wie die Zeilen wirklich
+        # aussehen, statt still aufzugeben.
+        if grep -q "failed to process" "$log"; then
+          warn "Extraktion abgebrochen, aber keine 'file not found'-Zeile erkannt. So sehen sie aus:"
+          grep -a "file not found" "$log" | head -3 | cat -v | sed 's/^/       /'
+        fi
+        break
+      fi
       versuch=$((versuch + 1))
       c "Eintraege ohne Datei im Abzug entfernen (Durchgang $versuch)"
       if ! printf '%s\n' "$fehlend" | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$liste"; then
