@@ -341,7 +341,31 @@ cmd_blobs() {
   else
     c "Herstellerdateien extrahieren (WLAN, Mobilfunk/IMS, NFC, eSIM, Kamera, Firmware)"
   fi
-  ./extract-files.py $regen "$ota"
+  if [ -z "$regen" ]; then
+    ./extract-files.py "$ota"
+  else
+    # extract-files.py sagt selbst, welche Dateien es nicht findet
+    # ("<pfad>: file not found") und bricht dann ab. Genau diese Eintraege
+    # nehmen wir aus der Liste und versuchen es erneut. Das haengt damit an
+    # dem, was das Werkzeug feststellt, statt an einer Annahme darueber, wie
+    # der Abzug aufgebaut ist.
+    local log liste versuch=0 rc=1
+    log=$(mktemp); liste="$SRC/device/nothing/$DEVICE/proprietary-files.txt"
+    while [ "$versuch" -le 3 ]; do
+      set +e
+      ./extract-files.py --regenerate "$ota" 2>&1 | tee "$log"
+      rc=${PIPESTATUS[0]}
+      set -e
+      [ "$rc" = 0 ] && break
+      fehlend=$(sed -n 's/^\(.*\): file not found$/\1/p' "$log" | sort -u)
+      [ -n "$fehlend" ] || break
+      versuch=$((versuch + 1))
+      c "Eintraege ohne Datei im Abzug entfernen (Durchgang $versuch)"
+      printf '%s\n' "$fehlend" | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$liste"
+    done
+    rm -f "$log"
+    [ "$rc" = 0 ] || die "Extraktion auch nach $versuch Aufraeumdurchgaengen nicht durch"
+  fi
   [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Extraktion unvollständig"
   c "OK: vendor/nothing/$DEVICE"
 }
