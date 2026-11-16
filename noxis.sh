@@ -341,6 +341,12 @@ cmd_blobs() {
   else
     c "Herstellerdateien extrahieren (WLAN, Mobilfunk/IMS, NFC, eSIM, Kamera, Firmware)"
   fi
+  # Was Noxis bewusst weglaesst, vor jeder Extraktion aus der Liste nehmen -
+  # auch nach einem 'repo sync', der proprietary-files.txt zuruecksetzt.
+  c "Weggelassene Herstellerdateien aus der Liste nehmen"
+  grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-weglassen.txt" \
+    | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$SRC/device/nothing/$DEVICE/proprietary-files.txt" \
+    || die "Liste der weggelassenen Dateien liess sich nicht anwenden"
   if [ -z "$regen" ]; then
     ./extract-files.py "$ota"
   else
