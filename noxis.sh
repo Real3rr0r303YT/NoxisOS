@@ -326,6 +326,32 @@ cmd_blobs() {
   local want
   want=$(sed -n 's/^## .*are from the \(.*\) release.*/\1/p' "$SRC/device/nothing/$DEVICE/proprietary-files.txt" | head -1)
   [ -n "$want" ] && c "Gerätebaum erwartet Nothing OS: $want"
+  # Stand des Abzugs mit dem erwarteten vergleichen, bevor irgendetwas
+  # passiert. Ein anderer Stand fuehrt nicht zu einem Fehler, sondern zu
+  # vielen: abweichende Pruefsummen, fehlende und neue Abhaengigkeiten, und
+  # jeder davon zeigt sich erst beim Bau. Das hat einmal eine Stunde
+  # gekostet - also lieber hier anhalten.
+  if [ -n "$want" ] && [ -d "$ota" ] && [ "${NOXIS_ANDERER_STAND:-0}" != 1 ]; then
+    local prop hat=""
+    for prop in "$ota/system/build.prop" "$ota/system/system/build.prop" \
+                "$ota/vendor/build.prop" "$ota/product/etc/build.prop"; do
+      [ -f "$prop" ] || continue
+      hat=$(grep -m1 -E '^ro\.(build\.display\.id|system\.build\.version\.incremental|vendor\.build\.version\.incremental)=' "$prop" | cut -d= -f2-)
+      [ -n "$hat" ] && break
+    done
+    if [ -n "$hat" ] && ! printf '%s' "$hat" | grep -qF "$want"; then
+      die "Der Abzug ist ein anderer Nothing-OS-Stand:
+         Abzug:     $hat
+         erwartet:  $want
+       Damit passen Pruefsummen und Abhaengigkeiten nicht, und der Bau
+       scheitert an immer neuen Stellen. Den passenden Stand gibt es hier
+       (Phone (3a) -> $want -> 'OTA Images'):
+         https://spike0en.github.io/nothing_archive/docs/firmware
+       Bewusst trotzdem weitermachen:  NOXIS_ANDERER_STAND=1 ./noxis.sh blobs ..."
+    elif [ -n "$hat" ]; then
+      c "Abzug passt: $hat"
+    fi
+  fi
   cd "$SRC/device/nothing/$DEVICE"
   # Der Geraetebaum schreibt Dateinamen und Pruefsummen einer bestimmten
   # Nothing-OS-Fassung fest. Ist der eigene Abzug eine andere, passt beides
