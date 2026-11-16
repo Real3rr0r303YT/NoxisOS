@@ -14,21 +14,26 @@ und nicht an einer Annahme darueber, wie der Abzug aufgebaut ist.
 import sys
 
 
-def quelle(zeile):
-    """Den Quellpfad aus einer Eintragszeile holen.
+def pfade(zeile):
+    """Quell- und Zielpfad aus einer Eintragszeile holen.
 
     Moegliche Formen:  -pfad   pfad|hash   pfad;MODUL   quelle:ziel
     Das fuehrende '-' heisst 'wird fuer den Bau gebraucht', der Rest sind
     Zusaetze hinter dem Pfad.
+
+    Bei 'quelle:ziel' zaehlen beide: extract-files.py meldet in seiner
+    Ausgabe den Zielpfad, eine Weglass-Liste nennt aber oft den, unter dem
+    die Datei im Geraet liegt. Mit nur einer Seite rutschen solche Eintraege
+    durch.
     """
     s = zeile.strip()
     if not s or s.startswith("#"):
-        return None
+        return ()
     if s.startswith("-"):
         s = s[1:]
     for trenner in ("|", ";"):
         s = s.split(trenner, 1)[0]
-    return s.split(":", 1)[0].strip()
+    return tuple(t.strip() for t in s.split(":", 1) if t.strip())
 
 
 def main():
@@ -45,9 +50,9 @@ def main():
 
     behalten, weg = [], []
     for z in zeilen:
-        q = quelle(z)
-        if q and q in fehlend:
-            weg.append(q)
+        treffer = [p for p in pfade(z) if p in fehlend]
+        if treffer:
+            weg.append(treffer[0])
         else:
             behalten.append(z)
 
