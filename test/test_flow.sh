@@ -68,7 +68,11 @@ ok "local manifest kopiert" "[ -f $NOXIS_SRC/.repo/local_manifests/noxis.xml ]"
 ok "vendor/noxis im Baum" "[ -f $NOXIS_SRC/vendor/noxis/packages/NoxisGuard/Android.bp ]"
 ok "KernelSU im Kernel-Config" "grep -q '^    vendor/asteroids_ksu.config' $NOXIS_SRC/device/nothing/asteroids/BoardConfig.mk"
 ok "dm-verity bleibt an (Standard)" "grep -q 'BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS :=\$' $NOXIS_SRC/vendor/noxis/config/BoardConfigNoxis.mk"
-ok "sync: --depth=1 (init + sync)" "grep -q 'repo init .*--depth=1' $LOG && grep -q 'repo sync .*--depth=1' $LOG"
+# --depth gehoert nur zum init. Echtes repo lehnt es beim sync ab ("no such
+# option"), die Attrappe hier schluckt jedes Argument - deshalb ist der
+# Fehler lange nicht aufgefallen. Jetzt wird die Abwesenheit geprueft.
+ok "sync: --depth=1 nur beim init" "grep -q 'repo init .*--depth=1' $LOG && ! grep -q 'repo sync .*--depth' $LOG"
+ok "sync: Abrufe begrenzt" "grep -qE 'repo sync .*-j[1-8]( |$)' $LOG"
 ./noxis.sh apps > "$W/apps.out" 2>&1;                    ok "apps" "[ -f vendor/noxis/prebuilt/GrapheneCamera/GrapheneCamera.apk ] && [ -f vendor/noxis/prebuilt/Fennec/Fennec.apk ]"
 ok "apps: richtige Assets (kein .idsig)" "grep -q 'Camera-71.apk\$' $W/apps.out"
 ok "apps: Fennec arm64 gewählt (nicht armv7)" "grep -q 'Fennec ← F-Droid 159.0.1 (1590110, arm64-v8a)' $W/apps.out && unzip -l vendor/noxis/prebuilt/Fennec/Fennec.apk | grep -q arm64-v8a"

@@ -115,8 +115,19 @@ cmd_sync() {
   mkdir -p .repo/local_manifests
   cp "$NOXIS/manifest/noxis.xml" .repo/local_manifests/noxis.xml
   c "Quellcode synchronisieren (beim ersten Mal mehrere Stunden)"
-  repo sync -c --current-branch --depth=1 -j"$(nproc)" --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune \
-    || repo sync -c --current-branch --depth=1 -j4 --force-sync --no-clone-bundle --no-tags
+  # --depth gehoert zu 'repo init', nicht zu 'repo sync' - dort ist es keine
+  # gueltige Option und bricht sofort ab. Die flache Tiefe steht seit dem
+  # init oben in der Manifest-Konfiguration und gilt fuer jeden sync.
+  #
+  # Gleichzeitige Abrufe nach RAM begrenzen: jeder ist ein eigener
+  # git-Prozess, und auf einem Rechner mit wenig Speicher holt der
+  # OOM-Killer sonst mitten im Abruf welche weg.
+  local jobs
+  jobs=$(awk '/MemTotal/ {j=int($2/1024/1024/2); print (j<2 ? 2 : (j>8 ? 8 : j))}' /proc/meminfo)
+  [ "$jobs" -gt "$(nproc)" ] && jobs=$(nproc)
+  c "  $jobs gleichzeitige Abrufe"
+  repo sync -c -j"$jobs" --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune \
+    || repo sync -c -j2 --force-sync --no-clone-bundle --no-tags
   cmd_vendor
 }
 
