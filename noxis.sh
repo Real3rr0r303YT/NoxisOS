@@ -175,7 +175,7 @@ gh_tag_asset() {  # <owner/repo> <tag> <regex>  →  Download-URL eines festen R
 
 tor_url() {  # neueste stabile Tor-Browser-Version für arm64
   local ver
-  ver=$(curl -fsSL https://dist.torproject.org/torbrowser/ | grep -oE 'href="[0-9]+\.[0-9]+(\.[0-9]+)?/"' \
+  ver=$(curl -fsSL --max-time 60 https://dist.torproject.org/torbrowser/ | grep -oE 'href="[0-9]+\.[0-9]+(\.[0-9]+)?/"' \
         | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | sort -V | tail -1) || true
   [ -n "$ver" ] && echo "https://dist.torproject.org/torbrowser/$ver/tor-browser-android-aarch64-$ver.apk"
   return 0
@@ -183,12 +183,19 @@ tor_url() {  # neueste stabile Tor-Browser-Version für arm64
 
 install_fennec() {  # Firefox ohne Google/Telemetrie (Fennec F-Droid), arm64-Variante
   local api ver codes code dir="$NOXIS/vendor/noxis/prebuilt/Fennec"
-  api=$(curl -fsSL https://f-droid.org/api/v1/packages/org.mozilla.fennec_fdroid) || { warn "Fennec: F-Droid nicht erreichbar"; return 0; }
-  ver=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); s=d["suggestedVersionCode"]; print(next(p["versionName"] for p in d["packages"] if p["versionCode"]==s))' "$api")
-  codes=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(" ".join(str(p["versionCode"]) for p in d["packages"] if p["versionName"]==sys.argv[2]))' "$api" "$ver")
+  api=$(curl -fsSL --max-time 60 https://f-droid.org/api/v1/packages/org.mozilla.fennec_fdroid) \
+    || { warn "Fennec: F-Droid nicht erreichbar – wird weggelassen"; return 0; }
+  # Ungeschuetzt wuerde eine Formataenderung bei F-Droid wegen 'set -e' den
+  # ganzen Lauf abbrechen. Eine fehlende App soll aber nur fehlen, wie bei
+  # install_apk auch.
+  ver=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); s=d["suggestedVersionCode"]; print(next(p["versionName"] for p in d["packages"] if p["versionCode"]==s))' "$api" 2>/dev/null) \
+    || { warn "Fennec: F-Droid-Antwort unerwartet – wird weggelassen"; return 0; }
+  [ -n "$ver" ] || { warn "Fennec: keine Version gefunden – wird weggelassen"; return 0; }
+  codes=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(" ".join(str(p["versionCode"]) for p in d["packages"] if p["versionName"]==sys.argv[2]))' "$api" "$ver" 2>/dev/null) \
+    || { warn "Fennec: keine Pakete zu $ver – wird weggelassen"; return 0; }
   mkdir -p "$dir"
   for code in $codes; do
-    curl -fsSL -o "$dir/Fennec.apk.part" "https://f-droid.org/repo/org.mozilla.fennec_fdroid_$code.apk" || continue
+    curl -fsSL --max-time 900 -o "$dir/Fennec.apk.part" "https://f-droid.org/repo/org.mozilla.fennec_fdroid_$code.apk" || continue
     if unzip -l "$dir/Fennec.apk.part" 2>/dev/null | grep -q 'lib/arm64-v8a/'; then
       mv "$dir/Fennec.apk.part" "$dir/Fennec.apk"
       c "Fennec ← F-Droid $ver ($code, arm64-v8a)"
@@ -216,7 +223,8 @@ install_apk() {  # <Name> <url> <privileged:true|false>
   [ -n "$url" ] || { warn "$name: keine Download-Adresse gefunden – wird weggelassen"; return 0; }
   mkdir -p "$dir"
   c "$name ← $url"
-  if ! curl -fL --progress-bar -o "$dir/$name.apk.part" "$url"; then
+  # --max-time, damit ein haengender Server den Lauf nicht endlos blockiert.
+  if ! curl -fL --progress-bar --connect-timeout 20 --max-time 1800 -o "$dir/$name.apk.part" "$url"; then
     warn "$name: Download fehlgeschlagen – wird weggelassen"
     rm -f "$dir/$name.apk.part"; rmdir "$dir" 2>/dev/null || true
     return 0
