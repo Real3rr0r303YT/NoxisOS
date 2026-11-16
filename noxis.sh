@@ -360,14 +360,26 @@ cmd_build() {
   [ -n "$CCACHE_EXEC" ] && ccache -M "${NOXIS_CCACHE_SIZE:-25G}" >/dev/null
   # Ohne Begrenzung startet mka so viele Übersetzer, wie Kerne da sind. Jeder
   # davon braucht Speicher; auf einem Rechner mit wenig RAM endet das im
-  # OOM-Killer, meist nach Stunden. Darum: ein Job je 4 GB RAM.
-  local ram jobs
+  # OOM-Killer, meist nach Stunden. Darum: ein Job je 4 GB.
+  #
+  # Swap zaehlt dabei mit, aber nur zur Haelfte. Nicht jeder Uebersetzer
+  # braucht seinen Speicher gleichzeitig, also darf etwas davon ausgelagert
+  # sein - voll gerechnet wuerde der Rechner aber nur noch auslagern statt
+  # zu uebersetzen. Mit 14 GB RAM und 24 GB Swap ergibt das 6 statt 3 Jobs
+  # und damit grob die halbe Bauzeit.
+  local ram swap jobs
   ram=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
-  jobs="${NOXIS_JOBS:-$(( ram / 4 ))}"
+  swap=$(awk '/SwapTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
+  jobs="${NOXIS_JOBS:-$(( (ram + swap / 2) / 4 ))}"
   [ "$jobs" -lt 2 ] && jobs=2
   [ "$jobs" -gt "$(nproc)" ] && jobs=$(nproc)
-  c "Baue Noxis OS ($DEVICE-$VARIANT) mit $jobs Jobs (${ram} GB RAM) – das dauert"
-  [ "$ram" -lt 24 ] && warn "Wenig RAM: rechne mit vielen Stunden. Mehr Jobs: NOXIS_JOBS=n"
+  c "Baue Noxis OS ($DEVICE-$VARIANT) mit $jobs Jobs (${ram} GB RAM + ${swap} GB Swap) – das dauert"
+  if [ "$ram" -lt 24 ]; then
+    warn "Wenig RAM: rechne mit vielen Stunden.
+       Haengt der Rechner nur noch am Auslagern (Platte dauerlaeuft, nichts
+       geht voran), mit weniger Jobs neu starten: NOXIS_JOBS=$(( jobs - 2 ))
+       Mehr Jobs gehen auch: NOXIS_JOBS=n"
+  fi
   mka -j"$jobs" target-files-package otatools
   c "Build fertig."
   cmd_opsec || die "OPSEC-Prüfung fehlgeschlagen – siehe oben"
