@@ -7,6 +7,10 @@
 #  ./noxis.sh sync               Quellcode holen (--depth=1, ~110 GB) + Noxis einbinden
 #  ./noxis.sh apps               Kamera/PDF, Firefox (Fennec), Mullvad, Tor, KernelSU-Manager
 #  ./noxis.sh blobs <ota.zip>    Herstellerdateien aus Nothing-OS-OTA ziehen
+#  ./noxis.sh blobs <ota.zip> --neu
+#                                dto., aber die Dateiliste aus dem Abzug neu
+#                                schreiben - noetig, wenn der Abzug ein
+#                                anderer Nothing-OS-Stand ist als der Baum
 #  ./noxis.sh keys               Eigene Signaturschlüssel
 #  ./noxis.sh build              Kompilieren (user-Build, KernelSU im Kernel)
 #  ./noxis.sh opsec              Gebautes Image gegen die OPSEC-Regeln prüfen
@@ -323,8 +327,21 @@ cmd_blobs() {
   want=$(sed -n 's/^## .*are from the \(.*\) release.*/\1/p' "$SRC/device/nothing/$DEVICE/proprietary-files.txt" | head -1)
   [ -n "$want" ] && c "Gerätebaum erwartet Nothing OS: $want"
   cd "$SRC/device/nothing/$DEVICE"
-  c "Herstellerdateien extrahieren (WLAN, Mobilfunk/IMS, NFC, eSIM, Kamera, Firmware)"
-  ./extract-files.py "$ota"
+  # Der Geraetebaum schreibt Dateinamen und Pruefsummen einer bestimmten
+  # Nothing-OS-Fassung fest. Ist der eigene Abzug eine andere, passt beides
+  # nicht: Pruefsummen weichen ab, und regionsfremde Dateien (Verizon in
+  # US-Firmware) fehlen ganz. Mit --neu laesst extract-files.py die Liste
+  # aus dem vorhandenen Abzug neu schreiben.
+  local regen=""
+  case "${2:-}${NOXIS_REGEN:+--neu}" in *--neu*) regen="--regenerate" ;; esac
+  if [ -n "$regen" ]; then
+    c "Herstellerdateien extrahieren, Dateiliste neu schreiben (anderer Nothing-OS-Stand)"
+    warn "proprietary-files.txt wird dabei geaendert. Ein spaeteres
+       'repo sync --force-sync' setzt das zurueck - dann hier erneut mit --neu."
+  else
+    c "Herstellerdateien extrahieren (WLAN, Mobilfunk/IMS, NFC, eSIM, Kamera, Firmware)"
+  fi
+  ./extract-files.py $regen "$ota"
   [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Extraktion unvollständig"
   c "OK: vendor/nothing/$DEVICE"
 }
