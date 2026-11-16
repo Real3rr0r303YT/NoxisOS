@@ -347,6 +347,21 @@ cmd_blobs() {
   grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-weglassen.txt" \
     | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$SRC/device/nothing/$DEVICE/proprietary-files.txt" \
     || die "Liste der weggelassenen Dateien liess sich nicht anwenden"
+  # Umgekehrt: was neuere Nothing-OS-Staende zusaetzlich brauchen. Nur
+  # nachtragen, wenn die Datei im entpackten Abzug liegt - sonst wuerde die
+  # Extraktion an einem Eintrag ohne Datei scheitern.
+  local liste_pf="$SRC/device/nothing/$DEVICE/proprietary-files.txt" dazu
+  if [ -d "$ota" ] && [ -f "$NOXIS/tools/blobs-dazu.txt" ]; then
+    grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-dazu.txt" | while read -r dazu; do
+      grep -qF "$dazu" "$liste_pf" && continue
+      if [ -e "$ota/$dazu" ]; then
+        printf '%s\n' "$dazu" >> "$liste_pf"
+        c "  nachgetragen: $dazu"
+      else
+        c "  nicht im Abzug, bleibt weg: $dazu"
+      fi
+    done
+  fi
   if [ -z "$regen" ]; then
     ./extract-files.py "$ota"
   else
