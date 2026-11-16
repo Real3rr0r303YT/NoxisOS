@@ -10,6 +10,10 @@
 # Woran man erkennt, dass hier etwas fehlt: der Bau bricht nach Sekunden ab
 # mit   "X" depends on undefined module "Y"   - dann gehoert Y.so hierher.
 
-# libntofflinepostproc (Nothing-Kamera, Nachbearbeitung) haengt in neueren
-# Staenden an dieser Schnittstelle.
-vendor/lib64/vendor.qti.camera.postproc@1.0-nt.so
+# (derzeit leer)
+#
+# Vorsicht bei Modulnamen mit Zusatz wie "-nt": die stammen oft nicht aus
+# dem Abzug, sondern aus einem Umbenennungs-Eintrag 'quelle:ziel' des
+# Geraetebaums. Fehlt so ein Modul, ist meist die Liste beschaedigt (etwa
+# durch --neu) - dann proprietary-files.txt per 'git checkout' zuruecksetzen,
+# statt hier etwas nachzutragen.

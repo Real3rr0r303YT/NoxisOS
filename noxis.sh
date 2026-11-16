@@ -336,8 +336,12 @@ cmd_blobs() {
   case "${2:-}${NOXIS_REGEN:+--neu}" in *--neu*) regen="--regenerate" ;; esac
   if [ -n "$regen" ]; then
     c "Herstellerdateien extrahieren, Dateiliste neu schreiben (anderer Nothing-OS-Stand)"
-    warn "proprietary-files.txt wird dabei geaendert. Ein spaeteres
-       'repo sync --force-sync' setzt das zurueck - dann hier erneut mit --neu."
+    warn "proprietary-files.txt wird dabei neu geschrieben. Dabei koennen
+       Umbenennungs-Eintraege (quelle:ziel) verloren gehen, und der Bau
+       meldet dann 'depends on undefined module'. Zuruecksetzen:
+         cd $SRC/device/nothing/$DEVICE && git checkout proprietary-files.txt
+       Fuer fehlende Verizon/Miracast-Dateien ist --neu nicht noetig, die
+       nimmt tools/blobs-weglassen.txt ohnehin heraus."
   else
     c "Herstellerdateien extrahieren (WLAN, Mobilfunk/IMS, NFC, eSIM, Kamera, Firmware)"
   fi
