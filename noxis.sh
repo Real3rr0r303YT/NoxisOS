@@ -67,6 +67,12 @@ cmd_check() {
        Docker-Volume vom Linux-Bau loeschen (wird beim naechsten Bau neu geholt):
          sudo docker volume rm noxis-kernel && sudo docker system prune -af"
   fi
+  if ! git config --global user.name >/dev/null 2>&1 \
+     || ! git config --global user.email >/dev/null 2>&1; then
+    warn "Git-Identitaet fehlt - repo bricht sonst beim sync ab:
+         git config --global user.name \"DEIN-NAME\"
+         git config --global user.email \"DEIN-NAME@users.noreply.github.com\""
+  fi
   for t in git git-lfs python3 curl zip unzip openssl ccache fastboot adb; do
     command -v "$t" >/dev/null && echo "  ✓ $t" || echo "  ✗ $t"
   done
@@ -103,9 +109,22 @@ need_space() {  # $1 = Pfad, $2 = noetige GB, $3 = wofuer
   c "Platz unter $1: $free GB frei"
 }
 
+# repo legt im Manifest-Baum eigene Commits an und braucht dafuer eine
+# globale Identitaet. Fehlt sie, bricht es erst nach dem Initialisieren ab -
+# also vorher fragen.
+git_identitaet() {
+  git config --global user.name >/dev/null 2>&1 \
+    && git config --global user.email >/dev/null 2>&1 && return 0
+  die "Git kennt dich noch nicht - repo braucht das. Einmalig setzen:
+         git config --global user.name \"DEIN-NAME\"
+         git config --global user.email \"DEIN-NAME@users.noreply.github.com\"
+       Die Noreply-Adresse von GitHub haelt deine echte Mail aus den Commits heraus."
+}
+
 cmd_sync() {
   need repo "siehe ./noxis.sh check"
   need git-lfs "git-lfs installieren"
+  git_identitaet
   [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$(dirname "$SRC")" 150 "den Quellcode"
   mkdir -p "$SRC" && cd "$SRC"
   if [ ! -d .repo ]; then
