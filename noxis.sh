@@ -73,7 +73,7 @@ cmd_check() {
          git config --global user.name \"DEIN-NAME\"
          git config --global user.email \"DEIN-NAME@users.noreply.github.com\""
   fi
-  for t in git git-lfs python3 curl zip unzip openssl ccache fastboot adb; do
+  for t in git git-lfs python3 curl zip unzip openssl ccache fastboot adb fsck.erofs; do
     command -v "$t" >/dev/null && echo "  ✓ $t" || echo "  ✗ $t"
   done
   command -v repo >/dev/null && echo "  ✓ repo" || echo "  ✗ repo  →  curl -o ~/.local/bin/repo https://storage.googleapis.com/git-repo-downloads/repo && chmod +x ~/.local/bin/repo"
@@ -81,9 +81,10 @@ cmd_check() {
 
 Pakete:
   Gentoo:  emerge -av dev-vcs/git dev-vcs/git-lfs dev-util/ccache app-arch/zip app-arch/unzip \
+           sys-fs/erofs-utils \
            dev-lang/python sys-devel/bc sys-devel/bison sys-devel/flex dev-libs/openssl \
            app-arch/lz4 dev-util/android-tools sys-libs/ncurses media-gfx/imagemagick
-  Ubuntu:  sudo apt install bc bison build-essential ccache curl flex g++-multilib gcc-multilib git \
+  Ubuntu:  sudo apt install erofs-utils bc bison build-essential ccache curl flex g++-multilib gcc-multilib git \
            git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool \
            lz4 libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool \
            squashfs-tools xsltproc zip zlib1g-dev python3 android-sdk-libsparse-utils
@@ -309,6 +310,14 @@ cmd_apps() {
 cmd_blobs() {
   local ota="${1:-}"
   [ -f "$ota" ] || [ -d "$ota" ] || die "Pfad zur Nothing-OS-OTA (Vollversion .zip) oder einem Dump angeben"
+  # Die Partitionen des Nothing-OS sind EROFS. Ohne fsck.erofs entpackt
+  # extract-files.py gar nichts, meldet das aber nur als Warnung und laeuft
+  # weiter - am Ende stehen dann tausend Zeilen "file not found", und die
+  # eigentliche Ursache steht ganz oben im Protokoll.
+  command -v fsck.erofs >/dev/null 2>&1 \
+    || die "fsck.erofs fehlt - ohne das bleiben alle Partitionen zu.
+       Gentoo:  sudo emerge -av sys-fs/erofs-utils
+       Ubuntu:  sudo apt install erofs-utils"
   ota="$(cd "$(dirname "$ota")" && pwd)/$(basename "$ota")"
   local want
   want=$(sed -n 's/^## .*are from the \(.*\) release.*/\1/p' "$SRC/device/nothing/$DEVICE/proprietary-files.txt" | head -1)

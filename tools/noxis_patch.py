@@ -125,16 +125,22 @@ def p_version():
     ok("Versionsname „Noxis“", "gepatcht")
 
 
-# ------------------------------------------------------------ 6. Jelly → Firefox (Fennec)
+# ------------------------------------------------------------ 6. Jelly raus, eigener Browser rein
 def p_browser():
-    if not os.path.exists(path("vendor/noxis/prebuilt/Fennec/Fennec.apk")):
-        return ok("Browser Jelly ersetzt", "übersprungen (Fennec fehlt)")
+    # Standardbrowser ist Cromite; Fennec kommt zusaetzlich, wenn F-Droid
+    # eine arm64-Fassung hat. Jelly fliegt raus, sobald einer von beiden da
+    # ist - frueher hing das allein an Fennec, und faellt der aus, blieb
+    # Jelly drin, obwohl Cromite laengst installiert war.
+    da = [n for n in ("Cromite", "Fennec")
+          if os.path.exists(path(f"vendor/noxis/prebuilt/{n}/{n}.apk"))]
+    if not da:
+        return ok("Browser Jelly ersetzt", "übersprungen (kein Browser da)")
     f = "vendor/lineage/config/common.mk"
     s = read(f)
     if "    ExactCalculator \\\n    Jelly\n" not in s:
         return ok("Browser Jelly ersetzt", "schon da")
     write(f, s.replace("    ExactCalculator \\\n    Jelly\n", "    ExactCalculator\n"))
-    ok("Browser Jelly ersetzt", "gepatcht")
+    ok("Browser Jelly ersetzt", "gepatcht (" + ", ".join(da) + ")")
 
 
 for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser):
