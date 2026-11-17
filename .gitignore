@@ -5,3 +5,4 @@ __pycache__/
 *.class
 vendor/nothing/
 nachinstallieren/
+vendor/noxis/prebuilt/
