@@ -220,7 +220,59 @@ def p_shims():
     ok("Shims (fehlen → entfernt: " + ", ".join(weg) + ")", "gepatcht")
 
 
-for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims):
+
+# ------------------------------------------------------------ 10. OpenEUICC-Manifeste
+# OpenEUICC (master) setzt den Paketnamen nur noch per "namespace" in Gradle,
+# nicht mehr im AndroidManifest.xml. Soong liest Gradle nicht und bricht ab:
+# "manifest:package attribute is not declared". Wir tragen den namespace aus
+# der build.gradle(.kts) des jeweiligen Moduls als package= ins Manifest ein.
+EUICC = "packages/apps/OpenEUICC"
+
+
+def p_openeuicc():
+    wurzel = path(EUICC)
+    if not os.path.isdir(wurzel):
+        return ok("OpenEUICC-Manifeste", "nicht vorhanden")
+    geaendert, fehlt = [], []
+    for d, dirs, files in os.walk(wurzel):
+        dirs[:] = [x for x in dirs if not x.startswith(".") and x not in ("build", "test", "androidTest")]
+        if "AndroidManifest.xml" not in files:
+            continue
+        mf = os.path.join(d, "AndroidManifest.xml")
+        text = open(mf, encoding="utf-8").read()
+        m = re.search(r"<manifest\b[^>]*>", text, re.S)
+        if not m or re.search(r"\bpackage\s*=", m.group(0)):
+            continue
+        # Modulordner: der Ordner ueber src/<variante>/
+        modul = d
+        teile = os.path.relpath(d, wurzel).split(os.sep)
+        if "src" in teile:
+            modul = os.path.join(wurzel, *teile[:teile.index("src")])
+        ns = None
+        for g in ("build.gradle.kts", "build.gradle"):
+            gp = os.path.join(modul, g)
+            if os.path.exists(gp):
+                n = re.search(r"""namespace\s*=?\s*["']([\w.]+)["']""", open(gp, encoding="utf-8").read())
+                if n:
+                    ns = n.group(1)
+                    break
+        rel = os.path.relpath(mf, path(""))
+        if not ns:
+            fehlt.append(rel)
+            continue
+        neu_tag = m.group(0).replace("<manifest", f'<manifest package="{ns}"', 1)
+        if not CHECK:
+            with open(mf, "w", encoding="utf-8") as fh:
+                fh.write(text[:m.start()] + neu_tag + text[m.end():])
+        geaendert.append(f"{rel} → {ns}")
+    for g in geaendert:
+        print(f"             {g}")
+    if fehlt:
+        return fail("OpenEUICC-Manifeste", "kein namespace gefunden fuer: " + ", ".join(fehlt))
+    ok("OpenEUICC-Manifeste", "gepatcht" if geaendert else "schon da")
+
+
+for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc):
     try:
         p()
     except FileNotFoundError as e:
