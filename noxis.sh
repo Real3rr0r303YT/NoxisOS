@@ -54,6 +54,27 @@ envsetup() {
   set -u
 }
 
+# Die Soong-Analyse ist ein einzelner Prozess mit 15-20 GB. Mit wenig RAM
+# schiesst der Kernel ihn ab ("signal: killed"), auch wenn die Swapdatei
+# frei ist - sie ist zu langsam. Komprimierter Swap im RAM (zram) reicht.
+# Gilt bis zum Neustart; ist er schon da, passiert nichts.
+zram_an() {
+  local ram
+  ram=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
+  [ "$ram" -ge 32 ] && return 0
+  if grep -q '^/dev/zram' /proc/swaps; then
+    c "zram-Swap schon aktiv"
+  else
+    c "Wenig RAM ($ram GB): richte 20 GB zram-Swap ein (sudo-Passwort)"
+    local z
+    sudo modprobe zram \
+      && z=$(sudo zramctl --find --size 20G --algorithm zstd) \
+      && sudo mkswap "$z" >/dev/null && sudo swapon -p 100 "$z" \
+      || { warn "zram ging nicht – die Analyse kann abgeschossen werden (signal: killed)"; return 0; }
+  fi
+  sudo sysctl -q vm.swappiness=180 vm.watermark_scale_factor=200 vm.page-cluster=0 || true
+}
+
 # ------------------------------------------------------------ check
 cmd_check() {
   local ram disk
@@ -490,9 +511,18 @@ cmd_build() {
   # out/ waechst beim Bauen auf ueber 100 GB.
   [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" 130 "out/ (das Bauen selbst)"
   cmd_vendor
+  zram_an
   envsetup
-  export USE_CCACHE=1 CCACHE_EXEC="$(command -v ccache || true)"
-  [ -n "$CCACHE_EXEC" ] && ccache -M "${NOXIS_CCACHE_SIZE:-25G}" >/dev/null
+  # ccache ist aus: beim ersten Bau ist der Cache leer und bringt nichts, und
+  # in den Bau-Sandboxen von Android 17 scheitert er mit "ccache: error: Not
+  # a directory". Wer ihn fuer spaetere Neubauten will: NOXIS_CCACHE=1.
+  if [ "${NOXIS_CCACHE:-0}" = 1 ] && command -v ccache >/dev/null; then
+    mkdir -p "$HOME/.ccache-noxis"
+    export USE_CCACHE=1 CCACHE_EXEC="$(command -v ccache)" CCACHE_DIR="$HOME/.ccache-noxis"
+    ccache -M "${NOXIS_CCACHE_SIZE:-25G}" >/dev/null
+  else
+    unset USE_CCACHE CCACHE_EXEC
+  fi
   # Ohne Begrenzung startet mka so viele Übersetzer, wie Kerne da sind. Jeder
   # davon braucht Speicher; auf einem Rechner mit wenig RAM endet das im
   # OOM-Killer, meist nach Stunden. Darum: ein Job je 4 GB.
