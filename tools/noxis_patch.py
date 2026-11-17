@@ -143,7 +143,43 @@ def p_browser():
     ok("Browser Jelly ersetzt", "gepatcht (" + ", ".join(da) + ")")
 
 
-for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser):
+# ------------------------------------------------------------ 7. Kamera: postproc@1.0-nt bereitstellen
+# extract-files.py biegt libntofflinepostproc und den postproc-Dienst per
+# replace_needed auf "vendor.qti.camera.postproc@1.0-nt.so" um - damit die
+# Herstellerfassung nicht mit der gleichnamigen, aus dem Quellcode gebauten
+# HIDL-Bibliothek kollidiert. Bereitgestellt wird das Modul im oeffentlichen
+# crDroid-Baum aber nirgends; der Bau bricht ab mit
+#   "libntofflinepostproc" depends on undefined module "vendor.qti.camera.postproc@1.0-nt"
+# Also: die Herstellerdatei unter dem neuen Namen mitnehmen und ihren SONAME
+# anpassen. Ohne den neuen SONAME haelt der Linker zur Laufzeit beide
+# Fassungen fuer dieselbe Bibliothek, und die Kamera stuerzt ab.
+PP_SRC = "vendor/lib64/vendor.qti.hardware.camera.postproc@1.0.so"
+PP_DST = "vendor/lib64/vendor.qti.camera.postproc@1.0-nt.so"
+
+
+def p_postproc():
+    fl, fe = f"{DEV}/proprietary-files.txt", f"{DEV}/extract-files.py"
+    l, e = read(fl), read(fe)
+    if "vendor.qti.camera.postproc@1.0-nt" not in e:
+        return ok("Kamera postproc@1.0-nt", "nicht noetig")
+    zeile = f"{PP_SRC}:{PP_DST}"
+    l2 = l if PP_DST in l else l.rstrip("\n") + "\n" + f"{MARK}: postproc fuer die Nothing-Kamera\n" + zeile + "\n"
+    e2 = e
+    if f"'{PP_DST}'" not in e:
+        m = re.search(r"\n([ \t]*)\(\n[ \t]*'vendor/lib64/libntofflinepostproc\.so',", e)
+        if not m:
+            return fail("Kamera postproc@1.0-nt", "Ankerstelle in extract-files.py nicht gefunden")
+        ein = m.group(1)
+        e2 = (e[:m.start()] + f"\n{ein}'{PP_DST}': blob_fixup()\n{ein}    .fix_soname(),"
+              + e[m.start():])
+    if l2 == l and e2 == e:
+        return ok("Kamera postproc@1.0-nt", "schon da")
+    write(fl, l2)
+    write(fe, e2)
+    ok("Kamera postproc@1.0-nt", "gepatcht")
+
+
+for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc):
     try:
         p()
     except FileNotFoundError as e:

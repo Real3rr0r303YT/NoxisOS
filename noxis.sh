@@ -371,6 +371,11 @@ cmd_blobs() {
   else
     c "Herstellerdateien extrahieren (WLAN, Mobilfunk/IMS, NFC, eSIM, Kamera, Firmware)"
   fi
+  # Noxis-Patches zuerst: einige betreffen die Dateiliste und extract-files.py
+  # selbst (etwa die Kamera-Bibliothek postproc@1.0-nt). Sie sind wiederholbar
+  # und greifen damit auch nach einem 'git checkout' der Liste.
+  c "Noxis-Patches auf den Geraetebaum anwenden"
+  python3 "$NOXIS/tools/noxis_patch.py" "$SRC" || die "Noxis-Patches fehlgeschlagen"
   # Was Noxis bewusst weglaesst, vor jeder Extraktion aus der Liste nehmen -
   # auch nach einem 'repo sync', der proprietary-files.txt zuruecksetzt.
   c "Weggelassene Herstellerdateien aus der Liste nehmen"
