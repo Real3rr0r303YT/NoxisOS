@@ -512,7 +512,7 @@ cmd_build() {
   # Was out/ schon belegt, ist vom Bedarf abzuziehen - sonst scheitert jeder
   # Weiterbau nach einem Abbruch an der Platzpruefung.
   local schon=0 noetig
-  [ -d "$SRC/out" ] && schon=$(du -sBG "$SRC/out" 2>/dev/null | tr -dc 0-9 || echo 0)
+  [ -d "$SRC/out" ] && schon=$(du -sBG "$SRC/out" 2>/dev/null | cut -f1 | tr -dc 0-9 || echo 0)
   noetig=$(( 130 - ${schon:-0} )); [ "$noetig" -lt 15 ] && noetig=15
   [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" "$noetig" "out/ (noch zu bauen, ${schon:-0} GB schon da)"
   cmd_vendor
