@@ -509,7 +509,12 @@ apex_keys() {  # <target_files.zip>
 cmd_build() {
   [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Erst ./noxis.sh blobs <ota.zip>"
   # out/ waechst beim Bauen auf ueber 100 GB.
-  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" 130 "out/ (das Bauen selbst)"
+  # Was out/ schon belegt, ist vom Bedarf abzuziehen - sonst scheitert jeder
+  # Weiterbau nach einem Abbruch an der Platzpruefung.
+  local schon=0 noetig
+  [ -d "$SRC/out" ] && schon=$(du -sBG "$SRC/out" 2>/dev/null | tr -dc 0-9 || echo 0)
+  noetig=$(( 130 - ${schon:-0} )); [ "$noetig" -lt 15 ] && noetig=15
+  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" "$noetig" "out/ (noch zu bauen, ${schon:-0} GB schon da)"
   cmd_vendor
   zram_an
   envsetup
