@@ -44,7 +44,10 @@ confirm() { read -rp "$1 [ja/N] " a; [ "$a" = "ja" ]; }
 
 envsetup() {
   cd "$SRC"
-  set +u
+  # LineageOS-Skripte lassen Befehle absichtlich fehlschlagen; die Falle von
+  # oben wuerde dort Fehlalarm geben. Ab hier meldet die() echte Fehler.
+  trap - ERR
+  set +Eu
   # shellcheck disable=SC1091
   source build/envsetup.sh >/dev/null
   breakfast "$DEVICE" "$VARIANT" >/dev/null || die "breakfast $DEVICE $VARIANT fehlgeschlagen"
@@ -512,7 +515,8 @@ cmd_build() {
        geht voran), mit weniger Jobs neu starten: NOXIS_JOBS=$(( jobs - 2 ))
        Mehr Jobs gehen auch: NOXIS_JOBS=n"
   fi
-  mka -j"$jobs" target-files-package otatools
+  mka -j"$jobs" target-files-package otatools \
+    || die "Build fehlgeschlagen – im Log oben nach der ersten Zeile mit 'error:' suchen"
   c "Build fertig."
   cmd_opsec || die "OPSEC-Prüfung fehlgeschlagen – siehe oben"
   c "Weiter: ./noxis.sh sign"

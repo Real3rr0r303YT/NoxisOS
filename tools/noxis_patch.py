@@ -179,7 +179,48 @@ def p_postproc():
     ok("Kamera postproc@1.0-nt", "gepatcht")
 
 
-for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc):
+# ------------------------------------------------------------ 9. Fehlende Shims
+# Der Geraetebaum haengt einigen Blobs per add_needed() Shim-Bibliotheken an.
+# Manche davon (z.B. libntcam_session_shim) kommen aus dem nicht oeffentlichen
+# Repo vendor/nothing/camera. Fehlt eine, bricht der Bau mit "depends on
+# undefined module" ab. Dann fliegt nur dieses add_needed() raus: der Blob
+# laeuft wie in Nothing OS, nur ohne die Zusatzfunktion der Nothing-Kamera.
+SHIM_SUCHE = ("device", "hardware", "vendor/nothing/camera", "vendor/noxis", "vendor/lineage")
+
+
+def shim_definiert(name):
+    muster = re.compile(r'name:\s*"' + re.escape(name) + r'"')
+    for wurzel in SHIM_SUCHE:
+        for d, dirs, files in os.walk(path(wurzel)):
+            dirs[:] = [x for x in dirs if not x.startswith(".")]
+            if "Android.bp" in files:
+                try:
+                    if muster.search(open(os.path.join(d, "Android.bp"), errors="ignore").read()):
+                        return True
+                except OSError:
+                    pass
+    return False
+
+
+def p_shims():
+    fe = f"{DEV}/extract-files.py"
+    e = read(fe)
+    weg = [n for n in sorted(set(re.findall(r"\.add_needed\('([A-Za-z0-9_]+_shim)\.so'\)", e)))
+           if not shim_definiert(n)]
+    if not weg:
+        return ok("Shims", "alle vorhanden")
+    e2 = e
+    for n in weg:
+        # Eintrag, der nur aus diesem add_needed besteht: ganz raus
+        e2 = re.sub(r"\n[ \t]*'[^']+': blob_fixup\(\)\n[ \t]*\.add_needed\('" + re.escape(n) + r"\.so'\),",
+                    "", e2)
+        # sonst nur die eine Zeile
+        e2 = re.sub(r"\n[ \t]*\.add_needed\('" + re.escape(n) + r"\.so'\)", "", e2)
+    write(fe, e2)
+    ok("Shims (fehlen → entfernt: " + ", ".join(weg) + ")", "gepatcht")
+
+
+for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims):
     try:
         p()
     except FileNotFoundError as e:
