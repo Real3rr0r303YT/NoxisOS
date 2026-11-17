@@ -20,7 +20,11 @@
 #  ./noxis.sh publish            OTA als GitHub-Release hochladen → Handy: Einstellungen → System → Updater
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
 # ============================================================
-set -euo pipefail
+set -Eeuo pipefail
+# Bricht das Skript an einer Stelle ab, die keine eigene Meldung hat, soll
+# man das sehen - mit Zeile und Befehl. Ohne das endet es stumm, und der
+# naechste Schritt laeuft mit altem Stand weiter, als waere nichts gewesen.
+trap 'printf "\033[1;31m[fehler]\033[0m unerwarteter Abbruch in noxis.sh Zeile %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
 NOXIS="$(cd "$(dirname "$0")" && pwd)"
 SRC="${NOXIS_SRC:-$HOME/noxis-src}"
@@ -379,7 +383,7 @@ cmd_blobs() {
   # Was Noxis bewusst weglaesst, vor jeder Extraktion aus der Liste nehmen -
   # auch nach einem 'repo sync', der proprietary-files.txt zuruecksetzt.
   c "Weggelassene Herstellerdateien aus der Liste nehmen"
-  grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-weglassen.txt" \
+  { grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-weglassen.txt" || true; } \
     | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$SRC/device/nothing/$DEVICE/proprietary-files.txt" \
     || die "Liste der weggelassenen Dateien liess sich nicht anwenden"
   # Umgekehrt: was neuere Nothing-OS-Staende zusaetzlich brauchen. Nur
@@ -387,7 +391,9 @@ cmd_blobs() {
   # Extraktion an einem Eintrag ohne Datei scheitern.
   local liste_pf="$SRC/device/nothing/$DEVICE/proprietary-files.txt" dazu
   if [ -d "$ota" ] && [ -f "$NOXIS/tools/blobs-dazu.txt" ]; then
-    grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-dazu.txt" | while read -r dazu; do
+    # '|| true': ohne Eintraege liefert grep 1, und mit pipefail wuerde das
+    # Skript hier stumm enden - genau so ist die Extraktion einmal ausgefallen.
+    { grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-dazu.txt" || true; } | while read -r dazu; do
       grep -qF "$dazu" "$liste_pf" && continue
       if [ -e "$ota/$dazu" ]; then
         printf '%s\n' "$dazu" >> "$liste_pf"
