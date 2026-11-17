@@ -75,6 +75,28 @@ zram_an() {
   sudo sysctl -q vm.swappiness=180 vm.watermark_scale_factor=200 vm.page-cluster=0 || true
 }
 
+# Einige Projekte (u.a. external/chromium-webview) liegen als Git-LFS vor.
+# Ohne git-lfs beim Sync bleiben dort nur kleine Textzeiger statt der APKs,
+# und der Bau scheitert erst nach Stunden ("aapt2 dump badging ... webview.apk").
+lfs_holen() {
+  command -v git-lfs >/dev/null 2>&1 || die "git-lfs fehlt.
+       Gentoo: sudo emerge --ask dev-vcs/git-lfs   Debian/Ubuntu: sudo apt install git-lfs"
+  git lfs install --skip-repo >/dev/null
+  c "Git-LFS-Dateien holen (WebView usw.)"
+  ( cd "$SRC" && repo forall -j4 -c 'git lfs pull >/dev/null 2>&1 || true' )
+}
+
+# Prueft vor dem Bauen, ob noch LFS-Zeiger statt echter Dateien da sind.
+lfs_pruefen() {
+  local apk="$SRC/external/chromium-webview/prebuilt/arm64/webview.apk"
+  if [ -f "$apk" ] && head -c 40 "$apk" | grep -q "git-lfs"; then
+    warn "WebView ist nur ein Git-LFS-Zeiger – hole die echten Dateien"
+    lfs_holen
+    head -c 40 "$apk" | grep -q "git-lfs" && die "WebView immer noch nicht geladen – Internet pruefen, dann nochmal"
+  fi
+  return 0
+}
+
 # ------------------------------------------------------------ check
 cmd_check() {
   local ram disk
@@ -158,6 +180,8 @@ cmd_sync() {
   need repo "siehe ./noxis.sh check"
   need git-lfs "git-lfs installieren"
   git_identitaet
+  command -v git-lfs >/dev/null 2>&1 || die "git-lfs fehlt – sonst fehlen nach dem Sync u.a. die WebView-APKs.
+       Gentoo: sudo emerge --ask dev-vcs/git-lfs"
   [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$(dirname "$SRC")" 150 "den Quellcode"
   mkdir -p "$SRC" && cd "$SRC"
   if [ ! -d .repo ]; then
@@ -180,6 +204,7 @@ cmd_sync() {
   c "  $jobs gleichzeitige Abrufe"
   repo sync -c -j"$jobs" --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune \
     || repo sync -c -j2 --force-sync --no-clone-bundle --no-tags
+  lfs_holen
   cmd_vendor
 }
 
@@ -516,6 +541,7 @@ cmd_build() {
   noetig=$(( 130 - ${schon:-0} )); [ "$noetig" -lt 15 ] && noetig=15
   [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" "$noetig" "out/ (noch zu bauen, ${schon:-0} GB schon da)"
   cmd_vendor
+  lfs_pruefen
   zram_an
   envsetup
   # ccache ist aus: beim ersten Bau ist der Cache leer und bringt nichts, und
