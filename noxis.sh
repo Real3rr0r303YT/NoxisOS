@@ -262,6 +262,8 @@ android_app_import {
     name: "Fennec",
     apk: "Fennec.apk",
     presigned: true,
+    // Signatur v2/v3 bleibt nur heil, wenn Soong die APK nicht anfasst
+    preprocessed: true,
     product_specific: true,
     dex_preopt: {
         enabled: false,
@@ -293,6 +295,8 @@ android_app_import {
     name: "$name",
     apk: "$name.apk",
     presigned: true,
+    // Signatur v2/v3 bleibt nur heil, wenn Soong die APK nicht anfasst
+    preprocessed: true,
     product_specific: true,
     privileged: $priv,
     dex_preopt: {
