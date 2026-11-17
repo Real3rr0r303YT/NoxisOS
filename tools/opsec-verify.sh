@@ -60,6 +60,9 @@ want_any() {   # $1 = Beschreibung, Rest = mögliche APK-Namen
       ok "$label ($n)"; return 0
     fi
   done
+  for n in "$@"; do
+    [ -f "${NOXIS_NACH:-/nonexistent}/$n.apk" ] && { warn "$label ($n) wird nach dem Flashen installiert (./noxis.sh nachinstall)"; return 0; }
+  done
   warn "$label fehlt - mit ./noxis.sh apps holen"
   return 1
 }

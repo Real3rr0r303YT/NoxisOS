@@ -97,6 +97,41 @@ lfs_pruefen() {
   return 0
 }
 
+# Vorsignierte Fremd-APKs (Tor Browser, Mullvad ...) muessen unveraendert
+# ins System. Android 17 verlangt dafuer unkomprimierte .so-Bibliotheken; manche
+# Hersteller liefern sie aber komprimiert aus ("Contains compressed JNI
+# libraries"). Umpacken wuerde ihre Signatur zerstoeren. Solche Apps kommen
+# deshalb nicht ins Image, sondern werden nach dem Flashen per adb installiert
+# (./noxis.sh nachinstall) - sie bleiben so original signiert und updatebar.
+NACH="$NOXIS/nachinstallieren"
+apks_pruefen() {
+  local d name apk
+  for d in "$SRC/vendor/noxis/prebuilt"/*/; do
+    name=$(basename "$d"); apk="$d$name.apk"
+    [ -f "$apk" ] && grep -qs "preprocessed: true" "$d/Android.bp" || continue
+    if unzip -v "$apk" 2>/dev/null | awk '$NF ~ /^lib\/.*\.so$/ && $2 != "Stored" {f=1} END {exit !f}'; then
+      mkdir -p "$NACH"
+      cp -f "$apk" "$NACH/$name.apk"
+      rm -rf "$d" "$NOXIS/vendor/noxis/prebuilt/$name"
+      warn "$name hat komprimierte Bibliotheken – kommt nicht ins Image,
+       sondern nach dem Flashen per ./noxis.sh nachinstall"
+    fi
+  done
+  return 0
+}
+
+cmd_nachinstall() {
+  need adb "android-tools installieren"
+  ls "$NACH"/*.apk >/dev/null 2>&1 || { c "Nichts nachzuinstallieren"; return 0; }
+  c "Handy mit USB-Debugging verbinden (Einstellungen → Entwickleroptionen)"
+  adb wait-for-device
+  local a
+  for a in "$NACH"/*.apk; do
+    c "installiere $(basename "$a" .apk)"
+    adb install -r "$a" || warn "$(basename "$a") ging nicht"
+  done
+}
+
 # ------------------------------------------------------------ check
 cmd_check() {
   local ram disk
@@ -545,6 +580,7 @@ cmd_build() {
   noetig=$(( 130 - ${schon:-0} )); [ "$noetig" -lt 15 ] && noetig=15
   [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" "$noetig" "out/ (noch zu bauen, ${schon:-0} GB schon da)"
   cmd_vendor
+  apks_pruefen
   lfs_pruefen
   zram_an
   envsetup
@@ -594,7 +630,7 @@ cmd_build() {
 cmd_opsec() {
   local prod="$SRC/out/target/product/$DEVICE"
   [ -d "$prod" ] || die "Nichts gebaut – erst ./noxis.sh build"
-  "$NOXIS/tools/opsec-verify.sh" "$prod"
+  NOXIS_NACH="$NACH" "$NOXIS/tools/opsec-verify.sh" "$prod"
 }
 
 # ------------------------------------------------------------ sign
@@ -757,6 +793,8 @@ EOF
   Im Recovery: "Reboot system now" – erster Start dauert 5–10 Minuten.
 
   Danach:
+   0. Falls beim Bauen Apps "nach dem Flashen" gemeldet wurden:
+      USB-Debugging an, dann am PC: ./noxis.sh nachinstall
    1. KernelSU-App öffnen → zeigt "Funktioniert" + Kernel-Version.
    2. Root ist für ALLE Apps gesperrt. Freigabe nur einzeln:
       KernelSU → Superuser → App antippen → Root erlauben.
@@ -783,6 +821,7 @@ case "${1:-}" in
   build)  cmd_build ;;
   sign)   cmd_sign ;;
   flash)  cmd_flash ;;
+  nachinstall) cmd_nachinstall ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
