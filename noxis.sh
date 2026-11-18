@@ -872,6 +872,36 @@ flash_teil() {  # <partition> <image>
   fastboot "${fl[@]}" flash "$1" "$2"
 }
 
+# Debug: den ADB-Schluessel dieses PCs in init_boot + recovery einbauen, damit
+# "adb logcat" schon beim (haengenden) ersten Start geht. Nur zur Fehlersuche –
+# danach mit ./noxis.sh flash wieder die normalen Images aufspielen.
+cmd_debugadb() {
+  need fastboot "android-tools installieren"
+  need adb "android-tools installieren"
+  local img key="$HOME/.android/adbkey.pub" mkb="$SRC/system/tools/mkbootimg" d="$REL/debug"
+  img=$(latest img.zip)
+  [ -f "$img" ] || die "Erst ./noxis.sh sign"
+  [ -f "$key" ] || { adb start-server >/dev/null 2>&1; sleep 1; }
+  [ -f "$key" ] || die "$key fehlt – einmal 'adb devices' ausfuehren"
+  [ -f "$mkb/mkbootimg.py" ] || die "$mkb fehlt (kommt mit ./noxis.sh sync)"
+  c "PC-Schluessel in init_boot + recovery einbauen"
+  python3 "$NOXIS/tools/noxis_adbkey.py" "$img" "$key" "$mkb" "$d" || die "Umbau fehlgeschlagen"
+  fastboot devices | grep -q . || die "Handy nicht im Fastboot (Leiser + Power 15 s halten)"
+  local p sl
+  for p in init_boot recovery; do
+    [ -f "$d/$p-adb.img" ] || continue
+    for sl in a b; do c "flash ${p}_$sl (Debug)"; fastboot flash "${p}_$sl" "$d/$p-adb.img"; done
+  done
+  fastboot reboot
+  cat <<EOF
+
+  Das Handy startet. Sobald das Noxis-Logo laeuft:
+    adb wait-for-device && adb logcat -b all -d > ~/noxis-logcat.txt; adb shell dmesg > ~/noxis-dmesg.txt 2>/dev/null
+  und ~/noxis-logcat.txt schicken. Spaeter: ./noxis.sh flash fuer die normalen Images.
+
+EOF
+}
+
 cmd_all() {
   [ -n "${1:-}" ] || die "./noxis.sh all <nothing-os-ota.zip>"
   cmd_check; cmd_sync; cmd_apps; cmd_blobs "$1"; cmd_keys; cmd_build; cmd_sign
@@ -889,6 +919,7 @@ case "${1:-}" in
   sign)   cmd_sign ;;
   flash)  cmd_flash ;;
   nachinstall) cmd_nachinstall ;;
+  debugadb) cmd_debugadb ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
