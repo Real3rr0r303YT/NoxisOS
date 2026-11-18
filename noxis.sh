@@ -958,7 +958,8 @@ cmd_sysextfix() {
   need adb "android-tools installieren"
   need fsck.erofs "sys-fs/erofs-utils installieren"
   need mkfs.erofs "sys-fs/erofs-utils installieren"
-  fsck.erofs --help 2>&1 | grep -q -- "--xattrs" \
+  # Hilfetext schreibt "--[no-]xattrs"
+  fsck.erofs --help 2>&1 | grep -q "xattrs" \
     || die "fsck.erofs zu alt (kein --xattrs) – sys-fs/erofs-utils aktualisieren"
   local img; img=$(latest img.zip)
   [ -f "$img" ] || die "Erst ./noxis.sh sign"
