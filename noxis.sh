@@ -17,6 +17,7 @@
 #  ./noxis.sh sign               Signieren → OTA + Images → Desktop, out/ löschen
 #  ./noxis.sh cleanup            ROM auf den Desktop, out/ löschen (NOXIS_KEEP_OUT=1 behält)
 #  ./noxis.sh flash              Aufs Handy installieren (geführt, Bootloader bleibt offen)
+#  ./noxis.sh nachinstall        Nach dem ersten Start: Mullvad/Tor per adb
 #  ./noxis.sh publish            OTA als GitHub-Release hochladen → Handy: Einstellungen → System → Updater
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
 # ============================================================
@@ -891,5 +892,5 @@ case "${1:-}" in
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '2,17p' "$0" ;;
+  *) sed -n '2,21p' "$0" ;;
 esac
