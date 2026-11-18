@@ -790,9 +790,14 @@ EOF
     # Ausdruecklich in beide Slots: der Nothing-Bootloader meldet fuer
     # init_boot/recovery/... kein has-slot, dann haengt fastboot kein _a an
     # und die Recovery landet nicht im aktiven Slot.
-    [ -f "$tmp/$p.img" ] && for sl in a b; do
-      c "flash ${p}_$sl"; fastboot flash "${p}_$sl" "$tmp/$p.img"
+    [ -f "$tmp/$p.img" ] || continue
+    local n=0
+    for sl in a b; do
+      c "flash ${p}_$sl"
+      fastboot flash "${p}_$sl" "$tmp/$p.img" && n=$((n+1)) || warn "${p}_$sl gibt es nicht"
     done
+    # Partition ohne Slots (z.B. vbmeta auf manchen Geraeten): ohne Endung
+    [ "$n" -gt 0 ] || { c "flash $p"; fastboot flash "$p" "$tmp/$p.img" || die "$p liess sich nicht flashen"; }
   done
   rm -rf "$tmp"
   fastboot reboot recovery
