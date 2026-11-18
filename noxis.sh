@@ -899,6 +899,9 @@ cmd_debugadb() {
   fastboot reboot
   cat <<EOF
 
+  Bootloop ohne ADB? Dann: Leiser+Power → Fastboot → fastboot reboot recovery
+  → adb shell cat /sys/fs/pstore/console-ramoops-0  (Kernel-Log vom Absturz)
+
   Das Handy startet. Sobald das Noxis-Logo laeuft:
     adb wait-for-device && adb logcat -b all -d > ~/noxis-logcat.txt; adb shell dmesg > ~/noxis-dmesg.txt 2>/dev/null
   und ~/noxis-logcat.txt schicken. Spaeter: ./noxis.sh flash fuer die normalen Images.

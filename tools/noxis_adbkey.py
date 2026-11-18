@@ -59,6 +59,15 @@ ro.adb.secure=0
 ro.control_privapp_permissions=log
 """
 
+# Recovery: adbd laeuft dort mit Schluessel, aber ohne Root - so kommt man
+# nicht an /sys/fs/pstore (Kernel-Protokoll vom abgestuerzten Start). Bei
+# offenem Bootloader behaelt adbd mit ro.secure=0 Root-Rechte.
+RECOVERY_DEBUG_PROP = b"""# Noxis OS debugadb (Recovery) - nur zur Fehlersuche
+ro.secure=0
+ro.adb.secure=0
+ro.debuggable=1
+"""
+
 # bootfix: nur die Startsperre loesen (fehlende privapp-Berechtigung wird
 # protokolliert statt system_server abstuerzen zu lassen). ADB bleibt normal:
 # aus, bis man es in den Entwickleroptionen einschaltet - mit Freigabe-Dialog.
@@ -129,9 +138,9 @@ def main():
             if bootfix:
                 files = [("force_debuggable", b""), ("adb_debug.prop", BOOTFIX_PROP)]
             else:
-                files = [("adb_keys", key)]
-                if name == "init_boot":
-                    files += [("force_debuggable", b""), ("adb_debug.prop", ADB_DEBUG_PROP)]
+                files = [("adb_keys", key), ("force_debuggable", b"")]
+                files.append(("adb_debug.prop",
+                              ADB_DEBUG_PROP if name == "init_boot" else RECOVERY_DEBUG_PROP))
             patch(src, files, mkb, dst)
             print(f"  {dst}")
 
