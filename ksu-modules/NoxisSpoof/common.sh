@@ -14,5 +14,7 @@ BRAND=${REST%%|*}; REST=${REST#*|}
 MANUF=${REST%%|*}; MODEL=${REST#*|}
 
 show() {  # current profile in the module list of the KernelSU app
-  sed -i "s/^description=.*/description=Apps see: $NAME ($MODEL). Action button = next profile, then reboot. Made by 3rr0r303YT on TikTok (GPL-3.0)/" "$MODDIR/module.prop"
+  local what="Apps see: $NAME ($MODEL)."
+  [ -z "$BRAND" ] && what="Spoofing off – apps see the real Nothing Phone (3a)."
+  sed -i "s/^description=.*/description=$what Action button = next profile, then reboot. Made by 3rr0r303YT on TikTok (GPL-3.0)/" "$MODDIR/module.prop"
 }

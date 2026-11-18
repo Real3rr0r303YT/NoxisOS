@@ -144,7 +144,7 @@ Just the manager, installed straight onto the connected phone: `./noxis.sh ksu` 
 
 `./noxis.sh apps` zips every folder in `ksu-modules/` into `postinstall/modules/`, `./noxis.sh postinstall` pushes it to *Download* and installs it with `ksud` (allow **Shell** once in KernelSU → Superuser, or install it by hand: KernelSU → Modules → Install → Download/…zip).
 
-* **NoxisSpoof** – apps see another phone model through `android.os.Build` (brand, manufacturer, model of system/product/system_ext). Profiles: Galaxy A55 (default), Galaxy S24, Pixel 8, Pixel 7a – **Action** button in KernelSU's module list switches, then reboot. vendor/odm values stay real so camera, modem and sensors keep working. Honest limit: it hides the model from simple apps and sites, not from apps that fingerprint hardware, kernel or Play Integrity.
+* **NoxisSpoof** – apps see another phone model through `android.os.Build` (brand, manufacturer, model of system/product/system_ext). Profiles: Galaxy A55 (default), Galaxy S24, Pixel 8, Pixel 7a, **Off** (real Nothing Phone (3a)) – **Action** button in KernelSU's module list switches, then reboot. vendor/odm values stay real so camera, modem and sensors keep working. Honest limit: it hides the model from simple apps and sites, not from apps that fingerprint hardware, kernel or Play Integrity.
 
 ## 4. Firewall matrix (LineageOS per-app network access)
 

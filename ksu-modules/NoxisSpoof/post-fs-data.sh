@@ -6,6 +6,8 @@
 # the camera, modem and sensor drivers check those and would break otherwise.
 MODDIR=$(dirname "$0")
 . "$MODDIR/common.sh"
+# "Off" profile: no values → nothing is changed, the phone stays itself
+if [ -z "$BRAND" ]; then show; exit 0; fi
 RP=$(command -v resetprop || echo /data/adb/ksu/bin/resetprop)
 for ns in "" system. product. system_ext.; do
   "$RP" -n "ro.product.${ns}brand" "$BRAND"

@@ -2,3 +2,4 @@ Samsung Galaxy A55|samsung|samsung|SM-A556B
 Samsung Galaxy S24|samsung|samsung|SM-S921B
 Google Pixel 8|google|Google|Pixel 8
 Google Pixel 7a|google|Google|Pixel 7a
+Off – real Nothing Phone (3a)|||

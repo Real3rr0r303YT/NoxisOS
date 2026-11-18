@@ -8,5 +8,5 @@ PROFILE=$(( PROFILE % COUNT + 1 ))
 echo "PROFILE=$PROFILE" > "$CONF"
 . "$MODDIR/common.sh"
 show
-echo "Next profile: $NAME ($MODEL)"
+if [ -z "$BRAND" ]; then echo "Next profile: $NAME"; else echo "Next profile: $NAME ($MODEL)"; fi
 echo "Reboot to apply."
