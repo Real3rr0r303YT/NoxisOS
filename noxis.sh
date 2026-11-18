@@ -775,10 +775,18 @@ cmd_flash() {
 EOF
   confirm "Ist das Handy entsperrt und im Fastboot-Modus verbunden?" || exit 0
   local prod; prod=$(fastboot getvar product 2>&1 | sed -n 's/^product: *//p')
-  [[ "${prod,,}" == *asteroids* ]] || confirm "Gerät meldet '$prod' statt Asteroids. Trotzdem weiter?" || exit 1
+  # Das Phone (3a) meldet im Bootloader den Qualcomm-Plattformnamen
+  # "pineapple" statt "asteroids" - beides ist richtig.
+  case "${prod,,}" in
+    *asteroids*|pineapple) c "Gerät: $prod (Nothing Phone (3a))" ;;
+    *) confirm "Gerät meldet '$prod' statt Asteroids/pineapple. Trotzdem weiter?" || exit 1 ;;
+  esac
   local tmp; tmp=$(mktemp -d)
   unzip -q -o "$img" -d "$tmp"
-  for p in boot init_boot vendor_boot dtbo vbmeta vbmeta_system vbmeta_vendor; do
+  # recovery gehoert dazu: das Phone (3a) hat eine eigene Recovery-Partition.
+  # Ohne sie startet gleich die Nothing-Recovery, und die nimmt das
+  # Noxis-Paket nicht an.
+  for p in boot init_boot vendor_boot recovery dtbo vbmeta vbmeta_system vbmeta_vendor; do
     [ -f "$tmp/$p.img" ] && { c "flash $p"; fastboot flash "$p" "$tmp/$p.img"; }
   done
   rm -rf "$tmp"
