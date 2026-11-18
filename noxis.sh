@@ -787,7 +787,12 @@ EOF
   # Ohne sie startet gleich die Nothing-Recovery, und die nimmt das
   # Noxis-Paket nicht an.
   for p in boot init_boot vendor_boot recovery dtbo vbmeta vbmeta_system vbmeta_vendor; do
-    [ -f "$tmp/$p.img" ] && { c "flash $p"; fastboot flash "$p" "$tmp/$p.img"; }
+    # Ausdruecklich in beide Slots: der Nothing-Bootloader meldet fuer
+    # init_boot/recovery/... kein has-slot, dann haengt fastboot kein _a an
+    # und die Recovery landet nicht im aktiven Slot.
+    [ -f "$tmp/$p.img" ] && for sl in a b; do
+      c "flash ${p}_$sl"; fastboot flash "${p}_$sl" "$tmp/$p.img"
+    done
   done
   rm -rf "$tmp"
   fastboot reboot recovery
