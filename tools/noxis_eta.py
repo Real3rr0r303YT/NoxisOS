@@ -74,7 +74,8 @@ def main():
     while alive(pid):
         p = read(path)
         now = time.time()
-        if p and p[0] > 0:
+        # Soong's own bootstrap shows up as 1/2 or 2/3 steps - that is still analysis
+        if p and p[0] > 50:
             total, done, failed = p
             hist.append((now, done))
             hist = [h for h in hist if now - h[0] <= 1200] or hist[-1:]
@@ -101,7 +102,7 @@ def main():
             if not alive(pid):
                 return
             p = read(path)
-            if p and p[0] > 0:
+            if p and p[0] > 50:
                 hist.append((time.time(), p[1]))
 
 
