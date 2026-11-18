@@ -36,6 +36,12 @@ endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/IronFox/IronFox.apk),)
 PRODUCT_PACKAGES += IronFox
 endif
+ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/FDroid/FDroid.apk),)
+PRODUCT_PACKAGES += FDroid
+endif
+ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/AuroraStore/AuroraStore.apk),)
+PRODUCT_PACKAGES += AuroraStore
+endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/Fennec/Fennec.apk),)
 PRODUCT_PACKAGES += Fennec
 endif

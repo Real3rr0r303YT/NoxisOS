@@ -7,7 +7,7 @@
 #
 #  ./noxis.sh check              Check the PC (RAM, disk, tools)
 #  ./noxis.sh sync               Fetch the source (--depth=1, ~110 GB) + add Noxis
-#  ./noxis.sh apps               Own apps, camera/PDF, IronFox, Termux, Mullvad, Tor, KernelSU manager
+#  ./noxis.sh apps               Own apps, camera/PDF, IronFox, F-Droid, Aurora, Termux, Mullvad, Tor, KernelSU manager
 #  ./noxis.sh blobs <ota|dump>   Extract the vendor files from a Nothing OS OTA or dump
 #  ./noxis.sh blobs <ota> --regen
 #                                Same, but rewrite the file list from the dump -
@@ -587,6 +587,10 @@ cmd_apps() {
   # Default browser: IronFox (hardened Firefox, uBlock Origin preinstalled)
   install_ironfox
   install_fennec
+  # App stores without Google: F-Droid (open source) and Aurora Store
+  # (Play Store apps anonymously, no Google account). Both into the image.
+  install_apk FDroid      "$(fdroid_apk org.fdroid.fdroid || true)" false
+  install_apk AuroraStore "$(fdroid_apk com.aurora.store || true)" false
   # Termux: user app (own data dir, updates via F-Droid) → installed after flashing
   install_post Termux "$(fdroid_apk com.termux || true)"
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false

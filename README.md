@@ -36,7 +36,7 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
 ```bash
 ./noxis.sh check                    # RAM ≥ 32 GB (or 16 + 32 GB swap), ~300 GB free during the build
 ./noxis.sh sync                     # LineageOS 24.0 (--depth=1) + Noxis manifest + patches
-./noxis.sh apps                     # own apps, camera, PDF, IronFox, Termux, Mullvad, Tor, KernelSU
+./noxis.sh apps                     # own apps, camera, PDF, IronFox, F-Droid, Aurora, Termux, Mullvad, Tor, KernelSU
 ./noxis.sh blobs ~/Downloads/Asteroids-OTA.zip   # full Nothing OS OTA (B4.1-260928-1204)
                                     #   other Nothing OS version / extracted dump: NOXIS_OTHER_FIRMWARE=1
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
@@ -93,6 +93,8 @@ Want the One UI look? Install a One UI Home module in the KernelSU app yourself 
 | Extra app | Source | How |
 |---|---|---|
 | **IronFox** (default browser) | [IronFox F-Droid repo](https://fdroid.ironfoxoss.org/fdroid/repo) | Firefox fork with **uBlock Origin preinstalled**, hardened settings, no telemetry – in the image |
+| **F-Droid** | [f-droid.org](https://f-droid.org/packages/org.fdroid.fdroid/) | open-source app store – in the image |
+| **Aurora Store** | [F-Droid](https://f-droid.org/packages/com.aurora.store/) | Play Store apps without a Google account (anonymous login) – in the image |
 | **Termux** | [F-Droid](https://f-droid.org/packages/com.termux/) | terminal with packages (`pkg install …`) – installed by `./noxis.sh postinstall` as a normal, updatable app |
 
 ## 1. Build manifest (`manifest/noxis.xml`)
@@ -146,6 +148,7 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 | IronFox (default browser) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Firefox (Fennec) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| F-Droid, Aurora Store | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Termux | ✓ | ✓ | ✓ | ✓ | ✗ | only if you allow it |
 | GrapheneOS Camera | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | PDF Viewer | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
