@@ -492,7 +492,7 @@ cmd_ksu() {
 # ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
 # name → LineageOS app it replaces (empty = added next to the stock app)
 NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
-NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery: NoxisPacker:"
+NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery:"
 
 install_own_apps() {
   local base="${NOXIS_APPS_URL:-https://github.com/$NOXIS_APPS_REPO/releases/download/noxis-apps}" tmp entry name over dir
@@ -534,7 +534,7 @@ install_own_apps() {
 # Apps that Noxis no longer ships: remove leftovers of earlier runs, otherwise
 # the old prebuilt in the source tree (cmd_vendor keeps prebuilt/) would still
 # end up in the image.
-NOXIS_DROPPED_APPS="Cromite NoxisLauncher Fennec"
+NOXIS_DROPPED_APPS="Cromite NoxisLauncher Fennec NoxisPacker"
 drop_old_apps() {
   local n
   for n in $NOXIS_DROPPED_APPS; do

@@ -42,9 +42,9 @@ PY
 out=$(run "file://$T/nothing-here")
 grep -q "release not found" <<<"$out" && [ "$(ls "$P" | wc -l)" = 5 ] && ok "missing release → warning, build continues" || bad "missing release: $out"
 mk="$ROOT/vendor/noxis/config/noxis.mk"
-grep -q "NOXIS_OWN_APPS := NoxisCalendar NoxisClock NoxisCalculator NoxisNotes NoxisCall NoxisBattery NoxisPacker" "$mk" && grep -q 'wildcard $(NOXIS_PATH)/prebuilt/$(a)/$(a).apk' "$mk" && ok "product config adds only downloaded apps" || bad "noxis.mk"
+grep -q "NOXIS_OWN_APPS := NoxisCalendar NoxisClock NoxisCalculator NoxisNotes NoxisCall NoxisBattery" "$mk" && grep -q 'wildcard $(NOXIS_PATH)/prebuilt/$(a)/$(a).apk' "$mk" && ok "product config adds only downloaded apps" || bad "noxis.mk"
 wf="$ROOT/.github/workflows/noxis-apps.yml"
 python3 -c "import yaml; yaml.safe_load(open('$wf'))" 2>/dev/null && ok "workflow YAML valid" || bad "workflow yaml"
-for r in NothingCalendar NothingClock NothingNotes Calculator NothingCall NothingBattery NothingPacker; do grep -q "repo: Real3rr0r303YT/$r " "$wf" || { bad "workflow lacks $r"; continue; }; done; ok "workflow builds all 7 repos"
+for r in NothingCalendar NothingClock NothingNotes Calculator NothingCall NothingBattery; do grep -q "repo: Real3rr0r303YT/$r " "$wf" || { bad "workflow lacks $r"; continue; }; done; ok "workflow builds all 6 repos"
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
