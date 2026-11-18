@@ -794,7 +794,12 @@ EOF
     local n=0
     for sl in a b; do
       c "flash ${p}_$sl"
-      fastboot flash "${p}_$sl" "$tmp/$p.img" && n=$((n+1)) || warn "${p}_$sl gibt es nicht"
+      # vbmeta mit abgeschalteter Pruefung: sonst startet die Recovery nicht
+      # (init bricht ab, Handy faellt zurueck in den Bootloader). Ursache noch
+      # offen - bis dahin so, damit das Handy ueberhaupt bootet.
+      local fl=()
+      [ "$p" = vbmeta ] && fl=(--disable-verity --disable-verification)
+      fastboot "${fl[@]}" flash "${p}_$sl" "$tmp/$p.img" && n=$((n+1)) || warn "${p}_$sl gibt es nicht"
     done
     # Partition ohne Slots (z.B. vbmeta auf manchen Geraeten): ohne Endung
     [ "$n" -gt 0 ] || { c "flash $p"; fastboot flash "$p" "$tmp/$p.img" || die "$p liess sich nicht flashen"; }
