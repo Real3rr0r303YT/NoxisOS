@@ -77,7 +77,7 @@ want_any() {   # $1 = description, rest = possible APK names
 }
 want_any "VPN"            MullvadVPN Mullvad
 want_any "Tor"            TorBrowser Tor
-want_any "Browser"        IronFox Fennec
+want_any "Browser"        IronFox
 want_any "Camera"         GrapheneCamera Camera
 want_any "Noxis Guard"    NoxisGuard
 want_any "KernelSU manager" KernelSU

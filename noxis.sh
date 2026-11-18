@@ -297,43 +297,6 @@ tor_url() {  # newest stable Tor Browser for arm64
   return 0
 }
 
-install_fennec() {  # Firefox without Google/telemetry (Fennec F-Droid), arm64 build
-  local api ver codes code dir="$NOXIS/vendor/noxis/prebuilt/Fennec"
-  api=$(curl -fsSL --max-time 60 https://f-droid.org/api/v1/packages/org.mozilla.fennec_fdroid) \
-    || { warn "Fennec: F-Droid not reachable – skipped"; return 0; }
-  # Unguarded, a format change at F-Droid would abort the whole run because
-  # of 'set -e'. A missing app should just be missing, like in install_apk.
-  ver=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); s=d["suggestedVersionCode"]; print(next(p["versionName"] for p in d["packages"] if p["versionCode"]==s))' "$api" 2>/dev/null) \
-    || { warn "Fennec: unexpected F-Droid answer – skipped"; return 0; }
-  [ -n "$ver" ] || { warn "Fennec: no version found – skipped"; return 0; }
-  codes=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(" ".join(str(p["versionCode"]) for p in d["packages"] if p["versionName"]==sys.argv[2]))' "$api" "$ver" 2>/dev/null) \
-    || { warn "Fennec: no packages for $ver – skipped"; return 0; }
-  mkdir -p "$dir"
-  for code in $codes; do
-    curl -fsSL --max-time 900 -o "$dir/Fennec.apk.part" "https://f-droid.org/repo/org.mozilla.fennec_fdroid_$code.apk" || continue
-    if unzip -l "$dir/Fennec.apk.part" 2>/dev/null | grep -q 'lib/arm64-v8a/'; then
-      mv "$dir/Fennec.apk.part" "$dir/Fennec.apk"
-      c "Fennec ← F-Droid $ver ($code, arm64-v8a)"
-      cat > "$dir/Android.bp" <<'EOF'
-android_app_import {
-    name: "Fennec",
-    apk: "Fennec.apk",
-    presigned: true,
-    // the v2/v3 signature only survives if Soong does not touch the APK
-    preprocessed: true,
-    product_specific: true,
-    dex_preopt: {
-        enabled: false,
-    },
-}
-EOF
-      return 0
-    fi
-  done
-  rm -f "$dir/Fennec.apk.part"; rmdir "$dir" 2>/dev/null || true
-  warn "Fennec: no arm64 APK found – browser skipped"
-}
-
 fdroid_apk() {  # <package> → URL of F-Droid's suggested APK (main repo)
   local api code
   api=$(curl -fsSL --max-time 60 "https://f-droid.org/api/v1/packages/$1") || return 1
@@ -570,7 +533,7 @@ install_own_apps() {
 # Apps that Noxis no longer ships: remove leftovers of earlier runs, otherwise
 # the old prebuilt in the source tree (cmd_vendor keeps prebuilt/) would still
 # end up in the image.
-NOXIS_DROPPED_APPS="Cromite NoxisLauncher"
+NOXIS_DROPPED_APPS="Cromite NoxisLauncher Fennec"
 drop_old_apps() {
   local n
   for n in $NOXIS_DROPPED_APPS; do
@@ -589,7 +552,6 @@ cmd_apps() {
   install_apk GraphenePdfViewer "$(gh_latest_asset GrapheneOS/PdfViewer '\.apk$' || true)" false
   # Default browser: IronFox (hardened Firefox, uBlock Origin preinstalled)
   install_ironfox
-  install_fennec
   # App stores without Google: F-Droid (open source) and Aurora Store
   # (Play Store apps anonymously, no Google account). Both into the image.
   install_apk FDroid      "$(fdroid_apk org.fdroid.fdroid || true)" false

@@ -41,9 +41,6 @@ case "\$*" in
   *"%{url_effective}"*releases/latest*) echo "https://github.com/x/y/releases/tag/71" ;;
   *GrapheneOS/Camera/releases/expanded_assets*)    echo '<a href="/GrapheneOS/Camera/releases/download/71/Camera-71.apk">' ; echo '<a href="/GrapheneOS/Camera/releases/download/71/Camera-71.apk.idsig">' ;;
   *GrapheneOS/PdfViewer/releases/expanded_assets*) echo '<a href="/GrapheneOS/PdfViewer/releases/download/71/PdfViewer-33.apk">' ;;
-  *f-droid.org/api/v1/packages/org.mozilla.fennec_fdroid*) echo '{"packageName":"org.mozilla.fennec_fdroid","suggestedVersionCode":1590120,"packages":[{"versionName":"159.0.1","versionCode":1590120},{"versionName":"159.0.1","versionCode":1590110},{"versionName":"159.0.1","versionCode":1590100},{"versionName":"159.0.0","versionCode":1590020}]}' ;;
-  *fennec_fdroid_1590110.apk*) out=\$(echo "\$*" | sed 's/.*-o \([^ ]*\).*/\1/'); t=\$(mktemp -d); mkdir -p \$t/lib/arm64-v8a; echo so > \$t/lib/arm64-v8a/libxul.so; (cd \$t && zip -qr "\$out" lib) ;;
-  *fennec_fdroid_*.apk*)       out=\$(echo "\$*" | sed 's/.*-o \([^ ]*\).*/\1/'); t=\$(mktemp -d); mkdir -p \$t/lib/armeabi-v7a; echo so > \$t/lib/armeabi-v7a/libxul.so; (cd \$t && zip -qr "\$out" lib) ;;
   *tiann/KernelSU/releases/expanded_assets/v3.3.1*) echo '<a href="/tiann/KernelSU/releases/download/v3.3.1/KernelSU_v3.3.1_32703-release.apk">'; echo '<a href="/tiann/KernelSU/releases/download/v3.3.1/ksud-aarch64-linux-android">' ;;
   *dist.torproject.org/torbrowser/) echo '<a href="16.0a14/">a</a> <a href="16.0/">b</a> <a href="15.0.9/">c</a> <a href="noscript/">n</a>' ;;
   *-o*) out=\$(echo "\$*" | sed 's/.*-o \([^ ]*\).*/\1/'); echo APK > "\$out" ;;
@@ -73,9 +70,8 @@ ok "dm-verity bleibt an (Standard)" "grep -q 'BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS :
 # Fehler lange nicht aufgefallen. Jetzt wird die Abwesenheit geprueft.
 ok "sync: --depth=1 nur beim init" "grep -q 'repo init .*--depth=1' $LOG && ! grep -q 'repo sync .*--depth' $LOG"
 ok "sync: Abrufe begrenzt" "grep -qE 'repo sync .*-j[1-8]( |$)' $LOG"
-./noxis.sh apps > "$W/apps.out" 2>&1;                    ok "apps" "[ -f vendor/noxis/prebuilt/GrapheneCamera/GrapheneCamera.apk ] && [ -f vendor/noxis/prebuilt/Fennec/Fennec.apk ]"
+./noxis.sh apps > "$W/apps.out" 2>&1;                    ok "apps" "[ -f vendor/noxis/prebuilt/GrapheneCamera/GrapheneCamera.apk ]"
 ok "apps: richtige Assets (kein .idsig)" "grep -q 'Camera-71.apk\$' $W/apps.out"
-ok "apps: Fennec arm64 gewählt (nicht armv7)" "grep -q 'Fennec ← F-Droid 159.0.1 (1590110, arm64-v8a)' $W/apps.out && unzip -l vendor/noxis/prebuilt/Fennec/Fennec.apk | grep -q arm64-v8a"
 ok "apps: Cromite removed from the image" "! grep -qi cromite vendor/noxis/config/noxis.mk"
 ok "apps: IronFox is the browser" "grep -q IronFox vendor/noxis/config/noxis.mk && grep -q org.ironfoxoss.ironfox vendor/noxis/overlay/NoxisFrameworksOverlay/res/values/config.xml"
 ok "apps: Termux after flashing" "grep -q 'install_post Termux' noxis.sh"

@@ -95,6 +95,7 @@ Want the One UI look? Install a One UI Home module in the KernelSU app yourself 
 | **IronFox** (default browser) | [IronFox F-Droid repo](https://fdroid.ironfoxoss.org/fdroid/repo) | Firefox fork with **uBlock Origin preinstalled**, hardened settings, no telemetry – in the image |
 | **F-Droid** | [f-droid.org](https://f-droid.org/packages/org.fdroid.fdroid/) | open-source app store – in the image |
 | **Aurora Store** | [F-Droid](https://f-droid.org/packages/com.aurora.store/) | Play Store apps without a Google account (anonymous login) – in the image |
+| Your own extra APKs (e.g. ZArchiver) | you | put the `.apk` into `~/NoxisOS/postinstall/` – `./noxis.sh postinstall` installs it too |
 | **Termux** | [F-Droid](https://f-droid.org/packages/com.termux/) | terminal with packages (`pkg install …`) – installed by `./noxis.sh postinstall` as a normal, updatable app |
 
 ## 1. Build manifest (`manifest/noxis.xml`)
@@ -125,7 +126,7 @@ Want the One UI look? Install a One UI Home module in the KernelSU app yourself 
 | Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS" with the Noxis logo instead of LineageOS |
 | About phone | `version.mk` + `NoxisLineageSdkOverlay` | "NoxisOS version: Noxis-1.0-DATE-asteroids" instead of "LineageOS version: 24.0-…-UNOFFICIAL" |
 | System updates | `NoxisUpdaterOverlay` | "NoxisOS" instead of "LineageOS 24.0" in the Updater |
-| Browser | `vendor/lineage/config/common.mk` | Jelly out; **IronFox** (hardened Firefox with uBlock Origin) is the default browser, Firefox (Fennec) stays available |
+| Browser | `vendor/lineage/config/common.mk` | Jelly out; **IronFox** (hardened Firefox with uBlock Origin) is the default browser |
 
 ## 3. KernelSU – root per app
 
@@ -146,7 +147,6 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Mullvad VPN | ✓ | ✓ | ✓ | – | ✓ | ✗ |
 | IronFox (default browser) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Firefox (Fennec) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | F-Droid, Aurora Store | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Termux | ✓ | ✓ | ✓ | ✓ | ✗ | only if you allow it |

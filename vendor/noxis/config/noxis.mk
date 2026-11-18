@@ -42,9 +42,6 @@ endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/AuroraStore/AuroraStore.apk),)
 PRODUCT_PACKAGES += AuroraStore
 endif
-ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/Fennec/Fennec.apk),)
-PRODUCT_PACKAGES += Fennec
-endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/MullvadVPN/MullvadVPN.apk),)
 PRODUCT_PACKAGES += MullvadVPN
 endif

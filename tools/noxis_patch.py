@@ -138,10 +138,9 @@ def p_version():
 
 # ------------------------------------------------------------ 6. Jelly raus, eigener Browser rein
 def p_browser():
-    # Default browser is IronFox (Firefox + uBlock Origin); Fennec is added
-    # when F-Droid has an arm64 build. Jelly goes as soon as one of them is
-    # there.
-    da = [n for n in ("IronFox", "Fennec")
+    # Default browser is IronFox (Firefox + uBlock Origin). Jelly only goes
+    # when it was really downloaded - never a phone without a browser.
+    da = [n for n in ("IronFox",)
           if os.path.exists(path(f"vendor/noxis/prebuilt/{n}/{n}.apk"))]
     if not da:
         return ok("Browser Jelly replaced", "skipped (no browser present)")
