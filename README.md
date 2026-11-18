@@ -41,6 +41,7 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
                                     #   other Nothing OS version / extracted dump: NOXIS_OTHER_FIRMWARE=1
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
 ./noxis.sh build                    # user build (checks privileged permissions first)
+./noxis.sh eta                      # (2nd terminal) time left of the running build – build prints it every 5 min too
 ./noxis.sh sign                     # → ROM on the desktop, out/ is deleted (NOXIS_KEEP_OUT=1 keeps it)
 ./noxis.sh flash                    # guided: boot images (both slots) → fastbootd → system partitions
 ./noxis.sh postinstall              # after first boot: Termux, Tor Browser … via adb (see below)

@@ -15,6 +15,7 @@
 #                                version than the device tree expects
 #  ./noxis.sh keys               Create your own signing keys
 #  ./noxis.sh build              Compile (user build, KernelSU in the kernel)
+#  ./noxis.sh eta                How long the running build still needs (2nd terminal)
 #  ./noxis.sh opsec              Check the built image against the OPSEC rules
 #  ./noxis.sh sign               Sign → OTA + images → Desktop, delete out/
 #  ./noxis.sh cleanup            ROM to the Desktop, delete out/ (NOXIS_KEEP_OUT=1 keeps it)
@@ -796,8 +797,16 @@ cmd_build() {
        with fewer jobs: NOXIS_JOBS=$(( jobs - 2 ))
        More jobs work too: NOXIS_JOBS=n"
   fi
-  mka -j"$jobs" target-files-package otatools \
-    || die "Build failed – look for the first line with 'error:' in the log above"
+  # Time left: printed every 5 minutes (stops by itself when the build ends).
+  # In a second terminal at any time: ./noxis.sh eta
+  rm -f "$SRC/out/build_progress.pb"
+  python3 "$NOXIS/tools/noxis_eta.py" "$SRC/out" --every "${NOXIS_ETA_EVERY:-300}" --pid $$ &
+  local eta=$!
+  if ! mka -j"$jobs" target-files-package otatools; then
+    kill "$eta" 2>/dev/null || true
+    die "Build failed – look for the first line with 'error:' in the log above"
+  fi
+  kill "$eta" 2>/dev/null || true
   c "Build done."
   cmd_opsec || die "OPSEC check failed – see above"
   c "Next: ./noxis.sh sign"
@@ -1238,11 +1247,12 @@ case "${1:-}" in
   flash)  cmd_flash ;;
   postinstall|nachinstall) cmd_postinstall ;;
   ksu)    cmd_ksu ;;
+  eta)    python3 "$NOXIS/tools/noxis_eta.py" "$SRC/out" --every 30 ;;
   direct|direkt) cmd_direct ;;
   sysextfix) cmd_sysextfix ;;
   debugadb) cmd_debugadb ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '5,30p' "$0" ;;
+  *) sed -n '5,31p' "$0" ;;
 esac
