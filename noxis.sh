@@ -764,13 +764,16 @@ cmd_flash() {
   local img ota
   img=$(latest img.zip); ota=$(latest ota.zip)
   [ -f "$img" ] && [ -f "$ota" ] || die "Erst ./noxis.sh sign"
+  c "ROM: $(basename "$ota")"
   cat <<EOF
 
   Vorbereitung (einmalig):
-   1. Nothing OS auf die neueste Version bringen.
+   1. Nothing OS NICHT updaten – die Firmware soll zum Stand passen, aus
+      dem die Blobs stammen (./noxis.sh blobs).
    2. Einstellungen → Telefoninfo → 7× Build-Nummer → Entwickleroptionen
       → "OEM-Entsperrung" + "USB-Debugging" an.
-   3. adb reboot bootloader  →  fastboot flashing unlock  (LÖSCHT ALLE DATEN)
+   3. Alles Wichtige vom Handy sichern – es wird komplett geloescht.
+   4. adb reboot bootloader  →  fastboot flashing unlock  → mit Lautstaerke bestaetigen
 
 EOF
   confirm "Ist das Handy entsperrt und im Fastboot-Modus verbunden?" || exit 0
@@ -781,55 +784,91 @@ EOF
     *asteroids*|pineapple) c "Gerät: $prod (Nothing Phone (3a))" ;;
     *) confirm "Gerät meldet '$prod' statt Asteroids/pineapple. Trotzdem weiter?" || exit 1 ;;
   esac
+  fastboot getvar unlocked 2>&1 | grep -q "unlocked: yes" \
+    || die "Bootloader ist gesperrt – erst: fastboot flashing unlock"
+
   local tmp; tmp=$(mktemp -d)
   unzip -q -o "$img" -d "$tmp"
-  # recovery gehoert dazu: das Phone (3a) hat eine eigene Recovery-Partition.
-  # Ohne sie startet gleich die Nothing-Recovery, und die nimmt das
-  # Noxis-Paket nicht an.
+  mkdir -p "$REL"
+  cp -f "$tmp/vbmeta.img" "$REL/.vbmeta-flash.img"
+  c "Slot a aktiv setzen"
+  fastboot --set-active=a
+  # recovery gehoert dazu: das Phone (3a) hat eigene recovery_a/_b. Ohne sie
+  # startet die Nothing-Recovery, und die nimmt das Noxis-Paket nicht an.
+  local p sl n
   for p in boot init_boot vendor_boot recovery dtbo vbmeta vbmeta_system vbmeta_vendor; do
-    # Ausdruecklich in beide Slots: der Nothing-Bootloader meldet fuer
-    # init_boot/recovery/... kein has-slot, dann haengt fastboot kein _a an
-    # und die Recovery landet nicht im aktiven Slot.
     [ -f "$tmp/$p.img" ] || continue
-    local n=0
+    n=0
+    # Ausdruecklich in beide Slots: der Nothing-Bootloader meldet fuer
+    # init_boot/recovery/... kein has-slot, dann haengt fastboot kein _a an.
     for sl in a b; do
       c "flash ${p}_$sl"
-      # vbmeta mit abgeschalteter Pruefung: sonst startet die Recovery nicht
-      # (init bricht ab, Handy faellt zurueck in den Bootloader). Ursache noch
-      # offen - bis dahin so, damit das Handy ueberhaupt bootet.
-      local fl=()
-      [ "$p" = vbmeta ] && fl=(--disable-verity --disable-verification)
-      fastboot "${fl[@]}" flash "${p}_$sl" "$tmp/$p.img" && n=$((n+1)) || warn "${p}_$sl gibt es nicht"
+      if flash_teil "${p}_$sl" "$tmp/$p.img"; then n=$((n+1)); else warn "${p}_$sl gibt es nicht"; fi
     done
-    # Partition ohne Slots (z.B. vbmeta auf manchen Geraeten): ohne Endung
-    [ "$n" -gt 0 ] || { c "flash $p"; fastboot flash "$p" "$tmp/$p.img" || die "$p liess sich nicht flashen"; }
+    [ "$n" -gt 0 ] || { c "flash $p"; flash_teil "$p" "$tmp/$p.img" || die "$p liess sich nicht flashen"; }
   done
   rm -rf "$tmp"
   fastboot reboot recovery
+
   cat <<EOF
 
-  Im Noxis-Recovery:
-   1. "Factory reset" → "Format data / factory reset" → bestätigen
-   2. Zurück → "Apply update" → "Apply from ADB"
+  Im Noxis-Recovery (lila Menue, "Active slot: a"):
+   1. "Factory reset" → "Format data / factory reset" → bestaetigen
+   2. Zurueck → "Apply update" → "Apply from ADB"
 
 EOF
   read -rp "Wenn 'Apply from ADB' aktiv ist, Enter drücken … " _
-  adb sideload "$ota" || warn "Fortschritt 47% mit 'Fehler' ist bei sideload normal"
+  c "Noxis OS installieren (die Signaturpruefung dauert 1-2 Minuten)"
+  adb sideload "$ota" || true
   cat <<EOF
 
-  Im Recovery: "Reboot system now" – erster Start dauert 5–10 Minuten.
+  Bei ~94-100 % bleibt der PC stehen – das ist normal.
+  Auf dem Handy muss "Step 2/2" stehen. Die Zeile
+  "ERROR: ... f2fs ... linear_lookup: Permission denied" ist harmlos.
 
-  Danach:
-   0. Falls beim Bauen Apps "nach dem Flashen" gemeldet wurden:
-      USB-Debugging an, dann am PC: ./noxis.sh nachinstall
-   1. KernelSU-App öffnen → zeigt "Funktioniert" + Kernel-Version.
-   2. Root ist für ALLE Apps gesperrt. Freigabe nur einzeln:
-      KernelSU → Superuser → App antippen → Root erlauben.
-   3. Mullvad öffnen, anmelden – vorher gibt es kein Internet (Killswitch).
-   4. Bootloader BLEIBT offen – NICHT "fastboot flashing lock" ausführen,
-      das macht das Gerät mit Noxis OS unbootbar.
+   1. Frage "reboot to recovery now?" → "No"
+   2. NICHT "Reboot system now"!  → "Advanced" → "Reboot to bootloader"
 
 EOF
+  read -rp "Wenn das Handy wieder im Fastboot ist, Enter drücken … " _
+  fastboot devices | grep -q . || die "Kein Handy im Fastboot – Kabel pruefen, dann von Hand:
+       fastboot --disable-verity --disable-verification flash vbmeta_a $REL/.vbmeta-flash.img
+       (dasselbe fuer vbmeta_b), dann: fastboot reboot"
+  # Das Update hat vbmeta mit Pruefung neu geschrieben - wieder abschalten.
+  for sl in a b; do
+    c "vbmeta_$sl (Pruefung aus)"
+    flash_teil "vbmeta_$sl" "$REL/.vbmeta-flash.img" || warn "vbmeta_$sl ging nicht"
+  done
+  c "Aktiver Slot: $(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')"
+  fastboot reboot
+  cat <<EOF
+
+  Erster Start: Nothing-Logo → Noxis-Logo. Das dauert 5-15 Minuten
+  (Verschluesselung einrichten, Apps optimieren). Nichts druecken.
+
+  Danach:
+   1. Einrichten, dann Entwickleroptionen → USB-Debugging an
+      → am PC: ./noxis.sh nachinstall   (Mullvad, Tor Browser)
+   2. KernelSU-App öffnen → zeigt "Funktioniert" + Kernel-Version.
+   3. Root ist für ALLE Apps gesperrt. Freigabe nur einzeln:
+      KernelSU → Superuser → App antippen → Root erlauben.
+   4. Mullvad öffnen, anmelden – vorher gibt es kein Internet (Killswitch).
+   5. Bootloader BLEIBT offen – NICHT "fastboot flashing lock" ausführen,
+      das macht das Gerät mit Noxis OS unbootbar.
+
+  Haengt der Start ueber 15 Minuten: Leiser + Power 15 s halten → Fastboot.
+  Zurueck zu Nothing OS geht immer (Bootloader bleibt offen).
+
+EOF
+}
+
+# Ein Image flashen. vbmeta mit abgeschalteter Pruefung: mit Pruefung bricht
+# init beim Start ab und das Handy faellt in den Bootloader zurueck (Ursache
+# noch offen, siehe README "Known issues").
+flash_teil() {  # <partition> <image>
+  local -a fl=()
+  case "$1" in vbmeta|vbmeta_a|vbmeta_b) fl=(--disable-verity --disable-verification) ;; esac
+  fastboot "${fl[@]}" flash "$1" "$2"
 }
 
 cmd_all() {

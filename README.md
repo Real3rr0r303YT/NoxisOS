@@ -38,10 +38,12 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
 ./noxis.sh sync                     # LineageOS 24.0 (--depth=1) + Noxis manifest + patches
 ./noxis.sh apps                     # camera, PDF, Firefox (Fennec), Mullvad, Tor, KernelSU manager
 ./noxis.sh blobs ~/Downloads/Asteroids-OTA.zip   # full Nothing OS OTA (B4.1-260928-1204)
+                                    #   other Nothing OS version / extracted dump: NOXIS_ANDERER_STAND=1
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
 ./noxis.sh build                    # user build
 ./noxis.sh sign                     # → ROM on the desktop, out/ is deleted
-./noxis.sh flash                    # guided: fastboot + adb sideload
+./noxis.sh flash                    # guided: fastboot (both slots) → recovery → adb sideload → vbmeta
+./noxis.sh nachinstall              # after first boot: Mullvad + Tor Browser via adb (see below)
 ./noxis.sh publish                  # signed OTA → GitHub release → phone updates itself
 ```
 
@@ -98,7 +100,7 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | KernelSU built in | `device/.../BoardConfig.mk` | `TARGET_KERNEL_CONFIG += vendor/asteroids_ksu.config` (`CONFIG_KSU=y`) – added if missing |
 | KernelSU source checked | `kernel/nothing/sm7635/KernelSU/kernel/Kbuild` | build stops if the driver is missing |
 | Kernel hardening | `vendor/noxis/config/BoardConfigNoxis.mk` | `init_on_alloc=1 init_on_free=1 page_alloc.shuffle=1 slab_nomerge randomize_kstack_offset=on` |
-| dm-verity on | `BoardConfigNoxis.mk` | system partitions stay read-only and verified (emergency: `NOXIS_DISABLE_VERITY=true`) |
+| dm-verity on | `BoardConfigNoxis.mk` | system partitions stay read-only and verified (emergency: `NOXIS_DISABLE_VERITY=true`) – **currently switched off at flash time, see [Known issues](#known-issues)** |
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
 | Name | `vendor/lineage/config/version.mk` | "Noxis-1.0-DATE" in Settings |
@@ -167,9 +169,42 @@ Quick settings: microphone and camera toggles are visible by default.
 
 ## Before you flash
 
-1. Settings → About phone → tap *Build number* 7× → Developer options → **OEM unlocking** + **USB debugging** on
-2. `adb reboot bootloader` → `fastboot flashing unlock` (wipes all data) → confirm with the volume keys
-3. `./noxis.sh flash` and follow the prompts
+1. **Do not update Nothing OS** – the firmware on the phone should match the Nothing OS version the blobs came from.
+2. Settings → About phone → tap *Build number* 7× → Developer options → **OEM unlocking** + **USB debugging** on
+3. Back up everything – flashing wipes the phone.
+4. `adb reboot bootloader` → `fastboot flashing unlock` → confirm with the volume keys
+
+## Flashing (`./noxis.sh flash`)
+
+The script walks you through every step and waits for you where the phone needs a tap:
+
+| Step | What happens |
+|---|---|
+| 1 | Checks the phone: fastboot, unlocked, `asteroids` (the bootloader reports the Qualcomm name **`pineapple`** – that is correct) |
+| 2 | `fastboot --set-active=a`, then `boot`, `init_boot`, `vendor_boot`, `recovery`, `dtbo`, `vbmeta*` into **both slots** (`_a` and `_b`). The Nothing bootloader reports no `has-slot`, so the suffix is set explicitly – otherwise the stock recovery stays active |
+| 3 | `vbmeta` is flashed with `--disable-verity --disable-verification` (see [Known issues](#known-issues)) |
+| 4 | Reboots into the **Noxis recovery** → *Factory reset → Format data*, then *Apply update → Apply from ADB* |
+| 5 | `adb sideload` of the signed OTA. The PC stops at ~94–100 % and the phone shows *Step 2/2* – that means done. `ERROR: … f2fs … linear_lookup` is harmless |
+| 6 | Answer **No** to "reboot to recovery now?", then *Advanced → Reboot to bootloader* – **not** "Reboot system" yet |
+| 7 | The script flashes `vbmeta` (verification off) into both slots again – the OTA rewrote it – and reboots |
+| 8 | First boot: Nothing logo → Noxis boot animation, **5–15 minutes** (encryption setup, app optimisation) |
+
+### After the first boot
+
+```bash
+./noxis.sh nachinstall    # USB debugging on → installs Mullvad VPN + Tor Browser via adb
+```
+
+Some vendor-signed APKs (Tor Browser, sometimes Mullvad) ship **compressed native libraries**. Android 17 only accepts pre-signed system apps with uncompressed libraries, and repacking would break the vendor's signature. `./noxis.sh build` detects this, keeps those apps out of the image and stores them in `nachinstallieren/`; `nachinstall` installs them as normal, still updatable apps.
+
+Stuck for more than 15 minutes: hold **Volume down + Power** for 15 s → fastboot. Going back to Nothing OS always works, the bootloader stays unlocked.
+
+## Known issues
+
+* **Verified boot is switched off when flashing.** With verification on, `init` aborts during boot and the phone drops back to the bootloader. Until the cause is found, `vbmeta` is flashed with `--disable-verity --disable-verification`. The images are still signed with your own keys.
+* **Firmware/blob version:** the device tree expects Nothing OS B4.1-260928-1204. Blobs from another version build fine with `NOXIS_ANDERER_STAND=1`, but camera, modem or fingerprint may misbehave.
+* **Little RAM:** the Soong analysis needs 15–20 GB. With less than 32 GB RAM `./noxis.sh build` sets up 20 GB of compressed swap (zram, asks for sudo) – without it the kernel kills the analysis (`signal: killed`).
+* **ccache** is off by default (`ccache: error: Not a directory` inside the Android 17 build sandbox); `NOXIS_CCACHE=1` turns it back on for rebuilds.
 
 ## Tests
 
