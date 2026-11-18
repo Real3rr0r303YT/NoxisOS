@@ -19,7 +19,8 @@
 #  ./noxis.sh sign               Sign → OTA + images → Desktop, delete out/
 #  ./noxis.sh cleanup            ROM to the Desktop, delete out/ (NOXIS_KEEP_OUT=1 keeps it)
 #  ./noxis.sh flash              Install on the phone (guided, bootloader stays unlocked)
-#  ./noxis.sh postinstall        After the first boot: Mullvad/Tor via adb
+#  ./noxis.sh postinstall        After the first boot: Mullvad/Tor/KernelSU via adb
+#  ./noxis.sh ksu                KernelSU manager matching the kernel (installs via adb)
 #  ./noxis.sh publish            Upload the OTA as a GitHub release → phone: Settings → System → Updater
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
 #
@@ -47,7 +48,7 @@ DEVICE="asteroids"
 if [ "${NOXIS_DEBUG:-0}" = 1 ]; then VARIANT="${NOXIS_VARIANT:-userdebug}"; else VARIANT="${NOXIS_VARIANT:-user}"; fi
 export NOXIS_DEBUG="${NOXIS_DEBUG:-0}"
 SUBJECT="${NOXIS_SUBJECT:-/C=DE/O=Noxis OS/OU=Noxis/CN=Noxis OS}"
-KSU_TAG="${NOXIS_KSU_TAG:-v3.3.1}"
+KSU_TAG="${NOXIS_KSU_TAG:-}"   # empty = pick the release that matches the kernel
 # Old (German) variable names keep working
 NOXIS_OTHER_FIRMWARE="${NOXIS_OTHER_FIRMWARE:-${NOXIS_ANDERER_STAND:-0}}"
 
@@ -356,6 +357,58 @@ EOF
   fi
 }
 
+# KernelSU manager and kernel must speak the same interface version (UAPI),
+# otherwise the app shows "Manager update required" / "Kernel update
+# required". The kernel tree brings its own KernelSU copy, so read its UAPI
+# version and take the newest official release with the same one.
+ksu_kernel_uapi() {
+  local h
+  for h in "$SRC"/kernel/nothing/sm7635/KernelSU/uapi/supercall.h "$SRC"/kernel/nothing/sm7635/drivers/kernelsu/uapi/supercall.h; do
+    [ -f "$h" ] && { sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' "$h" | head -1; return 0; }
+  done
+  return 0
+}
+
+ksu_tag() {
+  [ -n "$KSU_TAG" ] && { echo "$KSU_TAG"; return 0; }
+  local want tag have
+  want=$(ksu_kernel_uapi)
+  if [ -z "$want" ]; then
+    warn "KernelSU UAPI version of the kernel not found – taking the newest manager"
+    curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/tiann/KernelSU/releases/latest | sed 's,.*/tag/,,'
+    return 0
+  fi
+  for tag in $(curl -fsSL --max-time 60 "https://api.github.com/repos/tiann/KernelSU/releases?per_page=40" \
+               | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p'); do
+    have=$(curl -fsSL --max-time 30 "https://raw.githubusercontent.com/tiann/KernelSU/$tag/uapi/supercall.h" 2>/dev/null \
+           | sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' | head -1)
+    if [ "$have" = "$want" ]; then
+      c "KernelSU: kernel UAPI $want → manager $tag" >&2
+      echo "$tag"; return 0
+    fi
+  done
+  warn "No KernelSU release with UAPI $want found – set one with NOXIS_KSU_TAG=vX.Y.Z"
+  return 0
+}
+
+# Only the KernelSU manager: download the matching one and, if the phone is
+# connected with USB debugging, install it right away (updates the old one).
+cmd_ksu() {
+  need curl "install curl"
+  local tag url
+  tag=$(ksu_tag); [ -n "$tag" ] || die "no matching KernelSU release"
+  url=$(gh_tag_asset tiann/KernelSU "$tag" 'KernelSU.*\.apk$' || true)
+  [ -n "$url" ] || die "KernelSU $tag: no APK in the release"
+  mkdir -p "$POST"
+  c "KernelSU manager ← $url"
+  curl -fL --progress-bar --max-time 900 -o "$POST/KernelSU.apk" "$url" || die "download failed"
+  if command -v adb >/dev/null && [ "$(adb get-state 2>/dev/null)" = device ]; then
+    adb install -r "$POST/KernelSU.apk" && c "KernelSU manager $tag installed"
+  else
+    c "Phone not connected – later: ./noxis.sh postinstall"
+  fi
+}
+
 # ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
 # name → LineageOS app it replaces (empty = added next to the stock app)
 NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
@@ -408,8 +461,8 @@ cmd_apps() {
   install_fennec
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false
   install_apk TorBrowser        "$(tor_url)" false
-  # The manager has to match the KernelSU version in the kernel (vendored v3.3.1) and be officially signed
-  install_apk KernelSU          "$(gh_tag_asset tiann/KernelSU "$KSU_TAG" 'KernelSU.*\.apk$' || true)" false
+  # The manager has to match the KernelSU in the kernel and be officially signed
+  install_apk KernelSU          "$(gh_tag_asset tiann/KernelSU "$(ksu_tag)" 'KernelSU.*\.apk$' || true)" false
   [ -d "$SRC/vendor" ] && cmd_vendor
   return 0
 }
@@ -1073,11 +1126,12 @@ case "${1:-}" in
   sign)   cmd_sign ;;
   flash)  cmd_flash ;;
   postinstall|nachinstall) cmd_postinstall ;;
+  ksu)    cmd_ksu ;;
   direct|direkt) cmd_direct ;;
   sysextfix) cmd_sysextfix ;;
   debugadb) cmd_debugadb ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '5,29p' "$0" ;;
+  *) sed -n '5,30p' "$0" ;;
 esac

@@ -122,15 +122,14 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 
 ## 3. KernelSU – root per app
 
-KernelSU v3.3.1 (official `tiann/KernelSU`) is built into the device kernel, version `32703`.
-The manager ships as the **officially signed** v3.3.1 – the kernel only accepts that signature.
+KernelSU (official `tiann/KernelSU`) is built into the device kernel. Manager and kernel have to speak the same interface version (UAPI) – otherwise the app shows *Manager update required* or *Kernel update required*. `./noxis.sh apps` therefore reads the UAPI version from the kernel's KernelSU copy and downloads the newest **officially signed** manager release with the same one (the kernel only accepts that signature).
 
 ```
 KernelSU app → Superuser → tap an app → allow "Root"   (default: every app denied)
 KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 ```
 
-Pin another manager release: `NOXIS_KSU_TAG=v3.3.1 ./noxis.sh apps`.
+Just the manager, installed straight onto the connected phone: `./noxis.sh ksu`. Pin a release: `NOXIS_KSU_TAG=vX.Y.Z ./noxis.sh ksu`.
 
 ## 4. Firewall matrix (LineageOS per-app network access)
 
