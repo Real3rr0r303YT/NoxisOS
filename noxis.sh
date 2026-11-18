@@ -363,31 +363,48 @@ EOF
 # version and take the newest official release with the same one.
 ksu_kernel_uapi() {
   local h
-  for h in "$SRC"/kernel/nothing/sm7635/KernelSU/uapi/supercall.h "$SRC"/kernel/nothing/sm7635/drivers/kernelsu/uapi/supercall.h; do
-    [ -f "$h" ] && { sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' "$h" | head -1; return 0; }
+  for h in $(grep -rls "KERNEL_SU_UAPI_VERSION *=" "$SRC"/kernel/nothing/sm7635/KernelSU "$SRC"/kernel/nothing/sm7635/drivers/kernelsu 2>/dev/null || true); do
+    sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' "$h" | head -1
+    return 0
+  done
+  return 0
+}
+
+ksu_release_uapi() {  # <tag> → UAPI version of that release (empty if unknown)
+  local p v
+  for p in uapi/supercall.h kernel/uapi/supercall.h kernel/supercalls.h kernel/ksu.h; do
+    v=$( { curl -fsSL --max-time 30 "https://raw.githubusercontent.com/tiann/KernelSU/$1/$p" 2>/dev/null || true; } \
+         | sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' | head -1)
+    [ -n "$v" ] && { echo "$v"; return 0; }
   done
   return 0
 }
 
 ksu_tag() {
   [ -n "$KSU_TAG" ] && { echo "$KSU_TAG"; return 0; }
-  local want tag have
+  local want tag have tags
   want=$(ksu_kernel_uapi)
   if [ -z "$want" ]; then
     warn "KernelSU UAPI version of the kernel not found – taking the newest manager"
     curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/tiann/KernelSU/releases/latest | sed 's,.*/tag/,,'
     return 0
   fi
-  for tag in $(curl -fsSL --max-time 60 "https://api.github.com/repos/tiann/KernelSU/releases?per_page=40" \
-               | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p'); do
-    have=$(curl -fsSL --max-time 30 "https://raw.githubusercontent.com/tiann/KernelSU/$tag/uapi/supercall.h" 2>/dev/null \
-           | sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' | head -1)
+  c "KernelSU in the kernel: UAPI $want" >&2
+  tags=$( { curl -fsSL --max-time 60 "https://api.github.com/repos/tiann/KernelSU/releases?per_page=15" || true; } \
+          | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+  [ -n "$tags" ] || { warn "GitHub API not reachable"; return 0; }
+  for tag in $tags; do
+    have=$(ksu_release_uapi "$tag")
+    c "  $tag: UAPI ${have:-?}" >&2
     if [ "$have" = "$want" ]; then
-      c "KernelSU: kernel UAPI $want → manager $tag" >&2
+      c "KernelSU manager → $tag" >&2
       echo "$tag"; return 0
     fi
+    # releases are newest first: once a release is older than the kernel,
+    # no older one can match either
+    [ -n "$have" ] && [ "$have" -lt "$want" ] && break
   done
-  warn "No KernelSU release with UAPI $want found – set one with NOXIS_KSU_TAG=vX.Y.Z"
+  warn "No KernelSU release with UAPI $want – set one with NOXIS_KSU_TAG=vX.Y.Z"
   return 0
 }
 
