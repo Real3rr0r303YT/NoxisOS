@@ -80,6 +80,7 @@ want_any "Tor"            TorBrowser Tor
 want_any "Browser"        Fennec Cromite
 want_any "Camera"         GrapheneCamera Camera
 want_any "Noxis Guard"    NoxisGuard
+want_any "KernelSU manager" KernelSU
 
 # ---------------------------------------------------------------- 3. bootloader stays unlockable
 c "Bootloader"

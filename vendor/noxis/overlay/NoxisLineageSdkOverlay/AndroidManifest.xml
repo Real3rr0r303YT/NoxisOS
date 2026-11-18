@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later
+     Noxis OS – Made by 3rr0r303YT on TikTok -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.noxis.overlay.lineagesdk">
+    <overlay android:targetPackage="lineageos.platform" android:isStatic="true" android:priority="900" />
+</manifest>

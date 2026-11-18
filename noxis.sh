@@ -861,7 +861,7 @@ EOF
 
   After that:
    1. Set up the phone, then Developer options → USB debugging on
-      → on the PC: ./noxis.sh postinstall   (Mullvad, Tor Browser)
+      → on the PC: ./noxis.sh postinstall   (Mullvad, Tor Browser, KernelSU manager)
    2. Open the KernelSU app → shows "Working" + kernel version.
    3. Root is blocked for ALL apps. Grant it only one by one:
       KernelSU → Superuser → tap the app → allow root.

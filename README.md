@@ -116,6 +116,8 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
 | Name | `vendor/lineage/config/version.mk` | "Noxis-1.0-DATE" in Settings |
 | Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS" with the Noxis logo instead of LineageOS |
+| About phone | `version.mk` + `NoxisLineageSdkOverlay` | "NoxisOS version: Noxis-1.0-DATE-asteroids" instead of "LineageOS version: 24.0-…-UNOFFICIAL" |
+| System updates | `NoxisUpdaterOverlay` | "NoxisOS" instead of "LineageOS 24.0" in the Updater |
 | Browser | `vendor/lineage/config/common.mk` | Jelly out; **Cromite** (hardened Chromium: site isolation, strong renderer sandbox) is the default browser, Firefox (Fennec) stays available |
 
 ## 3. KernelSU – root per app
@@ -205,10 +207,10 @@ The script walks you through every step. Everything is written directly with fas
 ### After the first boot
 
 ```bash
-./noxis.sh postinstall    # USB debugging on → installs Mullvad VPN + Tor Browser via adb
+./noxis.sh postinstall    # USB debugging on → installs Mullvad VPN, Tor Browser, KernelSU manager via adb
 ```
 
-Some vendor-signed APKs (Tor Browser, sometimes Mullvad) ship **compressed native libraries**. Android 17 only accepts pre-signed system apps with uncompressed libraries, and repacking would break the vendor's signature. `./noxis.sh build` detects this, keeps those apps out of the image and stores them in `postinstall/`; `./noxis.sh postinstall` installs them as normal, still updatable apps.
+Some vendor-signed APKs (Tor Browser, the KernelSU manager, sometimes Mullvad) ship **compressed native libraries**. Android 17 only accepts pre-signed system apps with uncompressed libraries, and repacking would break the vendor's signature. `./noxis.sh build` detects this, keeps those apps out of the image and stores them in `postinstall/`; `./noxis.sh postinstall` installs them as normal, still updatable apps.
 
 Stuck for more than 15 minutes: hold **Volume down + Power** for 15 s → fastboot. Going back to Nothing OS always works, the bootloader stays unlocked.
 

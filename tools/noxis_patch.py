@@ -112,15 +112,26 @@ def p_camera():
 
 # ------------------------------------------------------------ 5. Name im System
 def p_version():
+    # LINEAGE_DISPLAY_VERSION: name of the build in Settings/OTA.
+    # LINEAGE_VERSION: ro.lineage.version - shown in Settings → About phone →
+    # "NoxisOS version" (otherwise "24.0-DATE-UNOFFICIAL-asteroids").
     f = "vendor/lineage/config/version.mk"
     s = read(f)
-    if "LINEAGE_DISPLAY_VERSION := Noxis-" in s:
+    if "LINEAGE_DISPLAY_VERSION := Noxis-" in s and "LINEAGE_VERSION := Noxis-" in s:
         return ok("Version name \"Noxis\"", "already done")
-    new, n = re.subn(r"^LINEAGE_DISPLAY_VERSION := .*$",
-                     "LINEAGE_DISPLAY_VERSION := Noxis-$(NOXIS_VERSION)-$(LINEAGE_BUILD_DATE)", s, flags=re.M)
-    if n != 1:
-        return fail("Version name \"Noxis\"", "LINEAGE_DISPLAY_VERSION not found")
-    new = new.replace("PRODUCT_VERSION_MAJOR = ", "NOXIS_VERSION ?= 1.0\nPRODUCT_VERSION_MAJOR = ", 1)
+    new = s
+    if "LINEAGE_DISPLAY_VERSION := Noxis-" not in new:
+        new, n = re.subn(r"^LINEAGE_DISPLAY_VERSION := .*$",
+                         "LINEAGE_DISPLAY_VERSION := Noxis-$(NOXIS_VERSION)-$(LINEAGE_BUILD_DATE)", new, flags=re.M)
+        if n < 1:
+            return fail("Version name \"Noxis\"", "LINEAGE_DISPLAY_VERSION not found")
+    if "LINEAGE_VERSION := Noxis-" not in new:
+        new, n = re.subn(r"^(\s*)LINEAGE_VERSION := .*$",
+                         r"\1LINEAGE_VERSION := Noxis-$(NOXIS_VERSION)-$(LINEAGE_BUILD_DATE)-$(LINEAGE_BUILD)", new, flags=re.M)
+        if n < 1:
+            return fail("Version name \"Noxis\"", "LINEAGE_VERSION not found")
+    if "NOXIS_VERSION ?=" not in new:
+        new = new.replace("PRODUCT_VERSION_MAJOR = ", "NOXIS_VERSION ?= 1.0\nPRODUCT_VERSION_MAJOR = ", 1)
     write(f, new)
     ok("Version name \"Noxis\"", "patched")
 

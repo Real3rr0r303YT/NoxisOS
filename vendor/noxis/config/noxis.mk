@@ -22,7 +22,9 @@ PRODUCT_PACKAGES += \
     privapp-permissions-noxis.xml \
     NoxisFrameworksOverlay \
     NoxisSystemUIOverlay \
-    NoxisSetupWizardOverlay
+    NoxisSetupWizardOverlay \
+    NoxisLineageSdkOverlay \
+    NoxisUpdaterOverlay
 
 # Vorgebaute, signierte Apps (von noxis.sh geladen)
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GrapheneCamera/GrapheneCamera.apk),)

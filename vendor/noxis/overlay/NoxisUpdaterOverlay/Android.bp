@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Noxis OS – Made by 3rr0r303YT on TikTok
+// System updates app: "NoxisOS" instead of "LineageOS 24.0".
+runtime_resource_overlay {
+    name: "NoxisUpdaterOverlay",
+    certificate: "platform",
+    system_ext_specific: true,
+}

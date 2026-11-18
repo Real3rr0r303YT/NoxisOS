@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later
+     Noxis OS – Made by 3rr0r303YT on TikTok -->
+<resources>
+    <!-- %1$s would be the LineageOS base version (24.0) - not shown on purpose -->
+    <string name="header_title_text">NoxisOS</string>
+    <string name="list_build_version">NoxisOS</string>
+    <string name="list_build_version_date">NoxisOS – <xliff:g id="date" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%2$s</xliff:g></string>
+    <string name="export_path" translatable="false">NoxisOS updates/</string>
+    <string name="info_dialog_message">NoxisOS updates are full installation packages. That means you can always install only the latest update, even if you skipped some in between!</string>
+    <string name="toast_forced_update_recovery">It is impossible to disable recovery updates on this device.</string>
+</resources>

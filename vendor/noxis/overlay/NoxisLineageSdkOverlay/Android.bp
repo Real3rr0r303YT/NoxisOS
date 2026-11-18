@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Noxis OS – Made by 3rr0r303YT on TikTok
+// Settings → About phone: "NoxisOS version" etc. instead of "LineageOS version".
+runtime_resource_overlay {
+    name: "NoxisLineageSdkOverlay",
+    certificate: "platform",
+    system_ext_specific: true,
+}
