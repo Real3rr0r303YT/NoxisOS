@@ -947,6 +947,73 @@ cmd_bootfix() {
   c "Handy startet – erster echter Start kann 5-10 Minuten dauern"
 }
 
+# Echter Fix OHNE Neubau fuer die Bootschleife durch die fehlende privapp-
+# Berechtigung: system_ext.img aus dem fertigen Build auspacken, die Zeile in
+# privapp-permissions-noxis.xml ergaenzen, wieder einpacken und per fastbootd
+# flashen. SELinux-Labels (xattrs) bleiben erhalten (Auspacken als root mit
+# --xattrs, Datei wird an Ort und Stelle geaendert). Laeuft, weil Verified
+# Boot beim Flashen abgeschaltet wurde. Danach: Original-init_boot/recovery.
+cmd_sysextfix() {
+  need fastboot "android-tools installieren"
+  need adb "android-tools installieren"
+  need fsck.erofs "sys-fs/erofs-utils installieren"
+  need mkfs.erofs "sys-fs/erofs-utils installieren"
+  fsck.erofs --help 2>&1 | grep -q -- "--xattrs" \
+    || die "fsck.erofs zu alt (kein --xattrs) – sys-fs/erofs-utils aktualisieren"
+  local img; img=$(latest img.zip)
+  [ -f "$img" ] || die "Erst ./noxis.sh sign"
+  local w="$REL/sysextfix"; sudo rm -rf "$w"; mkdir -p "$w"
+  c "system_ext.img auspacken"
+  unzip -q -o "$img" system_ext.img init_boot.img recovery.img -d "$w" || die "system_ext.img nicht im Paket"
+  python3 - "$w/system_ext.img" <<'PY' || die "system_ext.img ist kein EROFS – dieser Fix geht nur mit EROFS"
+import sys
+with open(sys.argv[1], "rb") as f:
+    f.seek(1024); sys.exit(0 if f.read(4) == bytes.fromhex("e2e1f5e0") else 1)
+PY
+  sudo fsck.erofs --extract="$w/root" --xattrs --preserve "$w/system_ext.img" >/dev/null \
+    || die "Auspacken fehlgeschlagen"
+  local x="$w/root/etc/permissions/privapp-permissions-noxis.xml"
+  sudo test -f "$x" || die "$x fehlt im Image"
+  # an Ort und Stelle aendern (gleiche Datei = SELinux-Label bleibt)
+  sudo python3 - "$x" "$NOXIS/vendor/noxis/permissions/privapp-permissions-noxis.xml" <<'PY' || die "XML-Aenderung fehlgeschlagen"
+import re, sys
+ziel, quelle = sys.argv[1:]
+neu = set(re.findall(r'name="([\w.]+)"', open(quelle).read()))
+with open(ziel, "r+") as f:
+    t = f.read()
+    da = set(re.findall(r'name="([\w.]+)"', t))
+    fehlt = sorted(p for p in neu - da if p.startswith("android.permission."))
+    if not fehlt:
+        print("  nichts zu ergaenzen"); sys.exit(0)
+    zeilen = "".join(f'        <permission name="{p}" />\n' for p in fehlt)
+    t = t.replace("    </privapp-permissions>", zeilen + "    </privapp-permissions>", 1)
+    f.seek(0); f.write(t); f.truncate()
+    for p in fehlt: print("  ergaenzt:", p)
+PY
+  c "system_ext.img neu packen"
+  sudo mkfs.erofs -zlz4hc "$w/system_ext-fix.img" "$w/root" >/dev/null || die "mkfs.erofs fehlgeschlagen"
+  sudo chown "$(id -u):$(id -g)" "$w/system_ext-fix.img"
+  ls -la "$w/system_ext.img" "$w/system_ext-fix.img"
+
+  c "Handy in fastbootd bringen"
+  if adb devices 2>/dev/null | grep -qE "(device|recovery)$"; then adb reboot fastboot; sleep 10
+  elif fastboot devices | grep -q .; then fastboot reboot fastboot; sleep 10; fi
+  fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes" \
+    || die "Kein fastbootd. Handy: Recovery → Advanced → Enter fastboot, dann nochmal ./noxis.sh sysextfix"
+  c "Aktiver Slot: $(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')"
+  fastboot flash system_ext "$w/system_ext-fix.img" || die "Flashen von system_ext fehlgeschlagen (Platz in super?)"
+  c "Original init_boot + recovery (ohne Debug-Aenderungen)"
+  local sl
+  fastboot reboot bootloader; sleep 8
+  for sl in a b; do
+    fastboot flash "init_boot_$sl" "$w/init_boot.img"
+    fastboot flash "recovery_$sl" "$w/recovery.img"
+  done
+  sudo rm -rf "$w/root"
+  fastboot reboot
+  c "Handy startet – erster Start 5-15 Minuten"
+}
+
 cmd_all() {
   [ -n "${1:-}" ] || die "./noxis.sh all <nothing-os-ota.zip>"
   cmd_check; cmd_sync; cmd_apps; cmd_blobs "$1"; cmd_keys; cmd_build; cmd_sign
@@ -966,6 +1033,7 @@ case "${1:-}" in
   nachinstall) cmd_nachinstall ;;
   debugadb) cmd_debugadb ;;
   bootfix) cmd_bootfix ;;
+  sysextfix) cmd_sysextfix ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
