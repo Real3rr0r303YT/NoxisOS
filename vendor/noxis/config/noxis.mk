@@ -60,3 +60,15 @@ PRODUCT_PACKAGES += OpenEUICC
 endif
 endif
 
+
+# ------------------------------------------------------------ Debug-Build
+# NOXIS_DEBUG=1 ./noxis.sh build: ADB laeuft ab dem ersten Start ohne
+# Freigabe-Dialog (der braucht ein fertig gestartetes Android). Nur zur
+# Fehlersuche bei Bootschleifen - die OPSEC-Pruefung warnt davor.
+# noxis.sh legt die Datei an (Umgebungsvariablen erreichen Kati nicht sicher)
+-include vendor/noxis/config/noxis_debug.mk
+ifeq ($(NOXIS_DEBUG),1)
+PRODUCT_SYSTEM_PROPERTIES += \
+    ro.adb.secure=0 \
+    persist.sys.usb.config=adb
+endif

@@ -7,3 +7,4 @@ vendor/nothing/
 nachinstallieren/
 vendor/noxis/prebuilt/
 release/
+vendor/noxis/config/noxis_debug.mk

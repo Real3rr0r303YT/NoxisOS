@@ -35,7 +35,10 @@ KEYS="${NOXIS_KEYS:-$HOME/.noxis-keys}"
 REL="${NOXIS_OUT:-$NOXIS/release}"
 BRANCH="lineage-24.0"
 DEVICE="asteroids"
-VARIANT="${NOXIS_VARIANT:-user}"
+# NOXIS_DEBUG=1: userdebug + ADB ab dem ersten Start ohne Freigabe - nur
+# zur Fehlersuche (Bootschleife), nie fuer den Alltag.
+if [ "${NOXIS_DEBUG:-0}" = 1 ]; then VARIANT="${NOXIS_VARIANT:-userdebug}"; else VARIANT="${NOXIS_VARIANT:-user}"; fi
+export NOXIS_DEBUG="${NOXIS_DEBUG:-0}"
 SUBJECT="${NOXIS_SUBJECT:-/C=DE/O=Noxis OS/OU=Noxis/CN=Noxis OS}"
 KSU_TAG="${NOXIS_KSU_TAG:-v3.3.1}"
 
@@ -583,6 +586,15 @@ cmd_build() {
   noetig=$(( 130 - ${schon:-0} )); [ "$noetig" -lt 15 ] && noetig=15
   [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" "$noetig" "out/ (noch zu bauen, ${schon:-0} GB schon da)"
   cmd_vendor
+  c "Privilegierte Berechtigungen pruefen"
+  python3 "$NOXIS/tools/noxis_privapp_check.py" "$SRC" "$SRC/vendor/noxis" \
+    || die "Berechtigung fehlt in vendor/noxis/permissions – sonst Bootschleife (siehe oben)"
+  if [ "$NOXIS_DEBUG" = 1 ]; then
+    echo "NOXIS_DEBUG := 1" > "$SRC/vendor/noxis/config/noxis_debug.mk"
+    warn "DEBUG-BUILD ($VARIANT): ADB offen ohne Freigabe – nur zur Fehlersuche!"
+  else
+    rm -f "$SRC/vendor/noxis/config/noxis_debug.mk"
+  fi
   apks_pruefen
   lfs_pruefen
   zram_an

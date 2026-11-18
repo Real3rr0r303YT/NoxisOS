@@ -109,6 +109,18 @@ else
   warn "keine Updater-URI gefunden"
 fi
 
+# ---------------------------------------------------------------- 6. ADB nur mit Freigabe
+c "ADB"
+if [ -n "$PROPS" ] && grep -hqs "^ro.adb.secure=0" $PROPS 2>/dev/null; then
+  if [ "${NOXIS_DEBUG:-0}" = 1 ]; then
+    warn "DEBUG-Build: ADB ohne Freigabe - nur zur Fehlersuche, nicht fuer den Alltag"
+  else
+    bad "ADB ohne Freigabe (ro.adb.secure=0) - jeder mit USB-Kabel hat Zugriff"
+  fi
+else
+  ok "ADB nur mit Freigabe-Dialog"
+fi
+
 # ---------------------------------------------------------------- Ergebnis
 echo
 if [ "$fail" -gt 0 ]; then
