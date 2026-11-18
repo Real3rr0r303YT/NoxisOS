@@ -48,10 +48,15 @@ def cpio_newc(files):
 # Android-eigener Weg, einen user-Build bei OFFENEM Bootloader debugbar zu
 # starten (first_stage_init: /force_debuggable -> /debug_ramdisk/adb_debug.prop
 # wird mit hoechster Prioritaet geladen). Bei gesperrtem Bootloader ignoriert
-# init das. Hier nur: ADB beim Start an, Schluessel bleibt Pflicht.
+# init das.
+# ro.adb.secure=0 ist noetig: seit Android 11 prueft adbd die Schluessel ueber
+# system_server - haengt der Start, gibt es niemanden, der "erlaubt" sagt.
+# Darum NUR zur Fehlersuche und danach ./noxis.sh flash (normale Images).
 ADB_DEBUG_PROP = b"""# Noxis OS debugadb - nur zur Fehlersuche
 persist.sys.usb.config=adb
+ro.adb.secure=0
 """
+
 
 
 def lz4_legacy_literal(data):
