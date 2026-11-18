@@ -1044,6 +1044,13 @@ PY
   esac
   ls -la "$w/system_ext.img" "$w/system_ext-fix.img"
 
+  # Nach mehreren Fehlstarts schaltet der Bootloader selbst auf den anderen
+  # Slot zurueck (dort liegt dann noch Nothing OS). Noxis liegt in dem Slot,
+  # in den das Update installiert wurde: NOXIS_SLOT=b ./noxis.sh sysextfix
+  if [ -n "${NOXIS_SLOT:-}" ]; then
+    fastboot devices | grep -q . || { adb reboot bootloader 2>/dev/null; sleep 8; }
+    c "Slot $NOXIS_SLOT aktiv setzen"; fastboot --set-active="$NOXIS_SLOT"
+  fi
   c "Handy in fastbootd bringen"
   if adb devices 2>/dev/null | grep -qE "(device|recovery)$"; then adb reboot fastboot; sleep 10
   elif fastboot devices | grep -q .; then fastboot reboot fastboot; sleep 10; fi
