@@ -33,6 +33,13 @@ if [ ! -d "$SYS" ]; then
   echo "[opsec] $PROD/system fehlt - erst bauen, dann prüfen"
   exit 2
 fi
+# Apps und Props liegen nicht nur in system/: Noxis-Apps sind product_specific
+# (product/), Noxis Guard ist system_ext. Alle Partitionen pruefen - auch
+# damit Google-Dienste nicht unbemerkt in product/ landen.
+ALL="$SYS"
+for p in system_ext product vendor odm; do
+  [ -d "$PROD/$p" ] && ALL="$ALL $PROD/$p"
+done
 
 # ---------------------------------------------------------------- 1. keine Google-Dienste
 c "Google-Dienste"
@@ -44,7 +51,7 @@ GMS_APKS="GmsCore GoogleServicesFramework Phonesky PrebuiltGmsCore GoogleLoginSe
           GooglePartnerSetup GoogleExtServices GoogleFeedback"
 found=""
 for n in $GMS_APKS; do
-  if find "$SYS" -iname "${n}*.apk" -print -quit 2>/dev/null | grep -q .; then
+  if find $ALL -iname "${n}*.apk" -print -quit 2>/dev/null | grep -q .; then
     found="$found $n"
   fi
 done
@@ -56,7 +63,7 @@ c "OPSEC-Apps"
 want_any() {   # $1 = Beschreibung, Rest = mögliche APK-Namen
   local label="$1"; shift
   for n in "$@"; do
-    if find "$SYS" -iname "${n}*.apk" -print -quit 2>/dev/null | grep -q .; then
+    if find $ALL -iname "${n}*.apk" -print -quit 2>/dev/null | grep -q .; then
       ok "$label ($n)"; return 0
     fi
   done
@@ -85,7 +92,7 @@ fi
 
 # ---------------------------------------------------------------- 4. kein Play-Integrity-Spoofing
 c "Integrity"
-if grep -rqsiE "PlayIntegrityFix|keybox\.xml|ro\.spoof\." "$SYS" 2>/dev/null; then
+if grep -rqsiE "PlayIntegrityFix|keybox\.xml|ro\.spoof\." $ALL 2>/dev/null; then
   bad "Play-Integrity-Spoofing gefunden - nicht Teil von Noxis OS"
 else
   ok "kein Integrity-Spoofing"
@@ -93,7 +100,7 @@ fi
 
 # ---------------------------------------------------------------- 5. Updates kommen von uns
 c "Updater"
-PROPS=$(find "$PROD" "$SYS" -maxdepth 2 -name "build.prop" -o -maxdepth 2 -name "*.prop" 2>/dev/null)
+PROPS=$( { find "$PROD" -maxdepth 1 -name "*.prop"; find $ALL -maxdepth 3 -name "*.prop"; } 2>/dev/null)
 if [ -n "$PROPS" ] && grep -hqs "lineage.updater.uri=.*Real3rr0r303YT" $PROPS 2>/dev/null; then
   ok "Updater zeigt auf das eigene GitHub-Release"
 elif [ -n "$PROPS" ] && grep -hqs "lineage.updater.uri=" $PROPS 2>/dev/null; then
