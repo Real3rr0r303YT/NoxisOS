@@ -906,6 +906,32 @@ cmd_debugadb() {
 EOF
 }
 
+# Sofort-Hilfe ohne Neubau fuer Builds, deren system_server an einer fehlenden
+# privapp-Berechtigung abstuerzt: init_boot laesst die Pruefung nur noch
+# protokollieren. ADB bleibt normal (aus, mit Freigabe-Dialog), die Recovery
+# wird wieder die normale. Gilt bis zum naechsten ./noxis.sh flash.
+cmd_bootfix() {
+  need fastboot "android-tools installieren"
+  local img mkb="$SRC/system/tools/mkbootimg" d="$REL/bootfix"
+  img=$(latest img.zip)
+  [ -f "$img" ] || die "Erst ./noxis.sh sign"
+  [ -f "$mkb/mkbootimg.py" ] || die "$mkb fehlt (kommt mit ./noxis.sh sync)"
+  python3 "$NOXIS/tools/noxis_adbkey.py" "$img" /dev/null "$mkb" "$d" --bootfix || die "Umbau fehlgeschlagen"
+  if ! fastboot devices | grep -q .; then
+    adb devices 2>/dev/null | grep -qE "(device|recovery)$" && { c "→ Bootloader"; adb reboot bootloader; sleep 8; }
+  fi
+  fastboot devices | grep -q . || die "Handy nicht im Fastboot (Leiser + Power 15 s halten)"
+  local tmp sl; tmp=$(mktemp -d)
+  unzip -q -o "$img" recovery.img -d "$tmp"
+  for sl in a b; do
+    c "flash init_boot_$sl (bootfix)"; fastboot flash "init_boot_$sl" "$d/init_boot-adb.img"
+    c "flash recovery_$sl (normal)";   fastboot flash "recovery_$sl" "$tmp/recovery.img"
+  done
+  rm -rf "$tmp"
+  fastboot reboot
+  c "Handy startet – erster echter Start kann 5-10 Minuten dauern"
+}
+
 cmd_all() {
   [ -n "${1:-}" ] || die "./noxis.sh all <nothing-os-ota.zip>"
   cmd_check; cmd_sync; cmd_apps; cmd_blobs "$1"; cmd_keys; cmd_build; cmd_sign
@@ -924,6 +950,7 @@ case "${1:-}" in
   flash)  cmd_flash ;;
   nachinstall) cmd_nachinstall ;;
   debugadb) cmd_debugadb ;;
+  bootfix) cmd_bootfix ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;

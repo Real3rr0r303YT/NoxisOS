@@ -11,5 +11,8 @@
         <permission name="android.permission.CONTROL_ALWAYS_ON_VPN" />
         <permission name="android.permission.MODIFY_PHONE_STATE" />
         <permission name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
+        <!-- seit Android 17 signature|privileged: fehlt sie hier, stuerzt
+             system_server beim Start ab (Bootschleife am Noxis-Logo) -->
+        <permission name="android.permission.SCHEDULE_EXACT_ALARM" />
     </privapp-permissions>
 </permissions>

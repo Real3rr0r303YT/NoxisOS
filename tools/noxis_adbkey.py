@@ -16,7 +16,8 @@ Nichts wird neu kompiliert: das Image wird ausgepackt, an die Ramdisk wird ein
 zweites cpio-Archiv mit /adb_keys angehaengt (der Kernel liest aneinander-
 gehaengte Archive nacheinander ein), dann wird es wieder eingepackt.
 
-Aufruf: noxis_adbkey.py <img.zip> <adbkey.pub> <mkbootimg-ordner> <ausgabe-ordner>
+Aufruf: noxis_adbkey.py <img.zip> <adbkey.pub> <mkbootimg-ordner> <ausgabe-ordner> [--bootfix]
+  --bootfix: nur init_boot, ohne offenes ADB, nur die privapp-Pruefung lockern
 """
 import gzip
 import os
@@ -55,6 +56,14 @@ def cpio_newc(files):
 ADB_DEBUG_PROP = b"""# Noxis OS debugadb - nur zur Fehlersuche
 persist.sys.usb.config=adb
 ro.adb.secure=0
+ro.control_privapp_permissions=log
+"""
+
+# bootfix: nur die Startsperre loesen (fehlende privapp-Berechtigung wird
+# protokolliert statt system_server abstuerzen zu lassen). ADB bleibt normal:
+# aus, bis man es in den Entwickleroptionen einschaltet - mit Freigabe-Dialog.
+BOOTFIX_PROP = b"""# Noxis OS bootfix - bis zum naechsten Build
+ro.control_privapp_permissions=log
 """
 
 
@@ -101,23 +110,28 @@ def patch(img, files, mkb, out):
 
 
 def main():
-    if len(sys.argv) != 5:
+    bootfix = "--bootfix" in sys.argv
+    argv = [a for a in sys.argv[1:] if a != "--bootfix"]
+    if len(argv) != 4:
         sys.exit(__doc__)
-    zipf, keyf, mkb, outdir = sys.argv[1:]
+    zipf, keyf, mkb, outdir = argv
     key = open(keyf, "rb").read()
-    if not key.strip():
+    if not key.strip() and not bootfix:
         sys.exit(f"{keyf} ist leer")
     os.makedirs(outdir, exist_ok=True)
     with tempfile.TemporaryDirectory() as t, zipfile.ZipFile(zipf) as z:
-        for name in ("init_boot", "recovery"):
+        for name in (("init_boot",) if bootfix else ("init_boot", "recovery")):
             if f"{name}.img" not in z.namelist():
                 print(f"  {name}.img nicht im Paket – uebersprungen")
                 continue
             src = z.extract(f"{name}.img", t)
             dst = os.path.join(outdir, f"{name}-adb.img")
-            files = [("adb_keys", key)]
-            if name == "init_boot":
-                files += [("force_debuggable", b""), ("adb_debug.prop", ADB_DEBUG_PROP)]
+            if bootfix:
+                files = [("force_debuggable", b""), ("adb_debug.prop", BOOTFIX_PROP)]
+            else:
+                files = [("adb_keys", key)]
+                if name == "init_boot":
+                    files += [("force_debuggable", b""), ("adb_debug.prop", ADB_DEBUG_PROP)]
             patch(src, files, mkb, dst)
             print(f"  {dst}")
 
