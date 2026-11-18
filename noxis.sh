@@ -953,45 +953,11 @@ cmd_bootfix() {
 # flashen. SELinux-Labels (xattrs) bleiben erhalten (Auspacken als root mit
 # --xattrs, Datei wird an Ort und Stelle geaendert). Laeuft, weil Verified
 # Boot beim Flashen abgeschaltet wurde. Danach: Original-init_boot/recovery.
-cmd_sysextfix() {
-  need fastboot "android-tools installieren"
-  need adb "android-tools installieren"
-  need fsck.erofs "sys-fs/erofs-utils installieren"
-  need mkfs.erofs "sys-fs/erofs-utils installieren"
-  # Hilfetext schreibt "--[no-]xattrs"
-  fsck.erofs --help 2>&1 | grep -q "xattrs" \
-    || die "fsck.erofs zu alt (kein --xattrs) – sys-fs/erofs-utils aktualisieren"
-  local img; img=$(latest img.zip)
-  [ -f "$img" ] || die "Erst ./noxis.sh sign"
-  local w="$REL/sysextfix"; sudo rm -rf "$w"; mkdir -p "$w"
-  c "system_ext.img auspacken"
-  unzip -q -o "$img" system_ext.img init_boot.img recovery.img -d "$w" || die "system_ext.img nicht im Paket"
-  # img.zip enthaelt oft "sparse"-Images (Android-Format) – erst entpacken
-  local typ
-  typ=$(python3 - "$w/system_ext.img" <<'PY'
-import sys
-with open(sys.argv[1], "rb") as f:
-    head = f.read(4); f.seek(1024); sb = f.read(4); f.seek(1080); e4 = f.read(2)
-if head == bytes.fromhex("3aff26ed"): print("sparse")
-elif sb == bytes.fromhex("e2e1f5e0"): print("erofs")
-elif e4 == bytes.fromhex("53ef"): print("ext4")
-else: print("unbekannt:" + head.hex())
-PY
-)
-  if [ "$typ" = sparse ]; then
-    need simg2img "dev-util/android-tools installieren (enthaelt simg2img)"
-    c "Sparse-Image entpacken"
-    simg2img "$w/system_ext.img" "$w/system_ext.raw" && mv -f "$w/system_ext.raw" "$w/system_ext.img"
-    typ=$(python3 -c "import sys;f=open(sys.argv[1],'rb');f.seek(1024);print('erofs' if f.read(4)==bytes.fromhex('e2e1f5e0') else 'anders')" "$w/system_ext.img")
-  fi
-  c "Dateisystem: $typ"
-  [ "$typ" = erofs ] || die "system_ext.img ist $typ, nicht EROFS – bitte Ausgabe an Claude schicken"
-  sudo fsck.erofs --extract="$w/root" --xattrs --preserve "$w/system_ext.img" >/dev/null \
-    || die "Auspacken fehlgeschlagen"
-  local x="$w/root/etc/permissions/privapp-permissions-noxis.xml"
-  sudo test -f "$x" || die "$x fehlt im Image"
-  # an Ort und Stelle aendern (gleiche Datei = SELinux-Label bleibt)
-  sudo python3 - "$x" "$NOXIS/vendor/noxis/permissions/privapp-permissions-noxis.xml" <<'PY' || die "XML-Aenderung fehlgeschlagen"
+# privapp-XML im Image an Ort und Stelle ergaenzen (gleiche Datei = das
+# SELinux-Label bleibt erhalten). Quelle: unsere Datei im Repo.
+xml_ergaenzen() {
+  sudo test -f "$1" || die "$1 fehlt im Image"
+  sudo python3 - "$1" "$NOXIS/vendor/noxis/permissions/privapp-permissions-noxis.xml" <<'PY'
 import re, sys
 ziel, quelle = sys.argv[1:]
 neu = set(re.findall(r'name="([\w.]+)"', open(quelle).read()))
@@ -1006,9 +972,76 @@ with open(ziel, "r+") as f:
     f.seek(0); f.write(t); f.truncate()
     for p in fehlt: print("  ergaenzt:", p)
 PY
-  c "system_ext.img neu packen"
-  sudo mkfs.erofs -zlz4hc "$w/system_ext-fix.img" "$w/root" >/dev/null || die "mkfs.erofs fehlgeschlagen"
-  sudo chown "$(id -u):$(id -g)" "$w/system_ext-fix.img"
+}
+
+cmd_sysextfix() {
+  need fastboot "android-tools installieren"
+  need adb "android-tools installieren"
+  need fsck.erofs "sys-fs/erofs-utils installieren"
+  need mkfs.erofs "sys-fs/erofs-utils installieren"
+  # Hilfetext schreibt "--[no-]xattrs"
+  fsck.erofs --help 2>&1 | grep -q "xattrs" \
+    || die "fsck.erofs zu alt (kein --xattrs) – sys-fs/erofs-utils aktualisieren"
+  local img; img=$(latest img.zip)
+  [ -f "$img" ] || die "Erst ./noxis.sh sign"
+  local w="$REL/sysextfix"; sudo rm -rf "$w"; mkdir -p "$w"
+  c "system_ext.img auspacken"
+  unzip -q -o "$img" system_ext.img init_boot.img recovery.img -d "$w" || die "system_ext.img nicht im Paket"
+  # img.zip enthaelt oft "sparse"-Images (Android-Format) – erst entpacken
+  fs_typ() {
+    python3 - "$1" <<'PY'
+import sys
+with open(sys.argv[1], "rb") as f:
+    head = f.read(4); f.seek(1024); sb = f.read(4); f.seek(1080); e4 = f.read(2)
+if head == bytes.fromhex("3aff26ed"): print("sparse")
+elif sb == bytes.fromhex("e2e1f5e0"): print("erofs")
+elif e4 == bytes.fromhex("53ef"): print("ext4")
+else: print("unbekannt-" + head.hex())
+PY
+  }
+  local typ; typ=$(fs_typ "$w/system_ext.img")
+  if [ "$typ" = sparse ]; then
+    need simg2img "dev-util/android-tools installieren (enthaelt simg2img)"
+    c "Sparse-Image entpacken"
+    simg2img "$w/system_ext.img" "$w/system_ext.raw" && mv -f "$w/system_ext.raw" "$w/system_ext.img"
+    typ=$(fs_typ "$w/system_ext.img")
+  fi
+  c "Dateisystem: $typ"
+  local x_rel="etc/permissions/privapp-permissions-noxis.xml" mnt="$w/mnt"
+  case "$typ" in
+    erofs)
+      sudo fsck.erofs --extract="$w/root" --xattrs --preserve "$w/system_ext.img" >/dev/null \
+        || die "Auspacken fehlgeschlagen"
+      xml_ergaenzen "$w/root/$x_rel"
+      c "system_ext.img neu packen"
+      sudo mkfs.erofs -zlz4hc "$w/system_ext-fix.img" "$w/root" >/dev/null || die "mkfs.erofs fehlgeschlagen"
+      sudo chown "$(id -u):$(id -g)" "$w/system_ext-fix.img"
+      sudo rm -rf "$w/root"
+      ;;
+    ext4)
+      need e2fsck "sys-fs/e2fsprogs installieren"; need resize2fs "sys-fs/e2fsprogs installieren"
+      cp -f "$w/system_ext.img" "$w/system_ext-fix.img"
+      # Android packt ext4 mit geteilten Bloecken (nur lesbar) – erst Platz
+      # schaffen und die Bloecke aufteilen, dann laesst es sich beschreiben.
+      truncate -s +512M "$w/system_ext-fix.img"
+      e2fsck -fy -E unshare_blocks "$w/system_ext-fix.img" >/dev/null 2>&1 || true
+      resize2fs "$w/system_ext-fix.img" >/dev/null 2>&1 || die "resize2fs fehlgeschlagen"
+      e2fsck -fy -E unshare_blocks "$w/system_ext-fix.img" >/dev/null 2>&1 || true
+      mkdir -p "$mnt"
+      sudo mount -o loop,rw "$w/system_ext-fix.img" "$mnt" || die "Image laesst sich nicht beschreibbar einhaengen"
+      xml_ergaenzen "$mnt/$x_rel" || { sudo umount "$mnt"; die "XML-Aenderung fehlgeschlagen"; }
+      sync; sudo umount "$mnt"
+      e2fsck -fy "$w/system_ext-fix.img" >/dev/null 2>&1 || true
+      resize2fs -M "$w/system_ext-fix.img" >/dev/null 2>&1 || true
+      # Datei auf die neue Dateisystemgroesse kuerzen, sonst passt sie evtl.
+      # nicht mehr in die super-Partition
+      local groesse
+      groesse=$(dumpe2fs -h "$w/system_ext-fix.img" 2>/dev/null \
+        | awk -F: '/^Block count/{gsub(/ /,"",$2);c=$2} /^Block size/{gsub(/ /,"",$2);b=$2} END{print c*b}')
+      [ "${groesse:-0}" -gt 0 ] && truncate -s "$groesse" "$w/system_ext-fix.img"
+      ;;
+    *) die "system_ext.img ist $typ – bitte Ausgabe an Claude schicken" ;;
+  esac
   ls -la "$w/system_ext.img" "$w/system_ext-fix.img"
 
   c "Handy in fastbootd bringen"
