@@ -338,6 +338,11 @@ install_apk() {  # <name> <url> <privileged:true|false>
     return 0
   fi
   mv "$dir/$name.apk.part" "$dir/$name.apk"
+  install_apk_bp "$name" "$priv"
+}
+
+install_apk_bp() {  # <name> <privileged> – Android.bp for an already downloaded APK
+  local name="$1" priv="$2" dir="$NOXIS/vendor/noxis/prebuilt/$1"
   cat > "$dir/Android.bp" <<EOF
 android_app_import {
     name: "$name",
@@ -402,25 +407,47 @@ ksu_tag() {
     fi
     # releases are newest first: once a release is older than the kernel,
     # no older one can match either
-    [ -n "$have" ] && [ "$have" -lt "$want" ] && break
+    if [ -n "$have" ] && [ "$have" -lt "$want" ]; then
+      # The kernel carries a KernelSU that is newer than every release (from
+      # the main branch). KernelSU's CI builds main with the official signing
+      # key, so that manager is accepted by the kernel and speaks its UAPI.
+      warn "The kernel's KernelSU is newer than the newest release – using the official main-branch build"
+      echo "main"; return 0
+    fi
   done
-  warn "No KernelSU release with UAPI $want – set one with NOXIS_KSU_TAG=vX.Y.Z"
+  warn "No KernelSU release with UAPI $want – set one with NOXIS_KSU_TAG=vX.Y.Z or NOXIS_KSU_TAG=main"
   return 0
+}
+
+# Download the KernelSU manager for a tag (or "main" = official CI build of
+# the main branch, via nightly.link because GitHub artifacts need a login).
+ksu_download() {  # <tag> <target.apk>
+  local tag="$1" out="$2" url tmp
+  if [ "$tag" = main ]; then
+    tmp=$(mktemp -d)
+    url="https://nightly.link/tiann/KernelSU/workflows/build-manager/main/manager-gradle.zip"
+    c "KernelSU manager ← $url"
+    curl -fL --progress-bar --max-time 900 -o "$tmp/m.zip" "$url" || { rm -rf "$tmp"; return 1; }
+    unzip -q -o "$tmp/m.zip" -d "$tmp" && ls "$tmp"/*.apk >/dev/null 2>&1 || { rm -rf "$tmp"; return 1; }
+    mv -f "$(ls "$tmp"/*.apk | head -1)" "$out"; rm -rf "$tmp"
+  else
+    url=$(gh_tag_asset tiann/KernelSU "$tag" 'KernelSU.*\.apk$' || true)
+    [ -n "$url" ] || return 1
+    c "KernelSU manager ← $url"
+    curl -fL --progress-bar --max-time 900 -o "$out" "$url" || return 1
+  fi
 }
 
 # Only the KernelSU manager: download the matching one and, if the phone is
 # connected with USB debugging, install it right away (updates the old one).
 cmd_ksu() {
-  need curl "install curl"
-  local tag url
-  tag=$(ksu_tag); [ -n "$tag" ] || die "no matching KernelSU release"
-  url=$(gh_tag_asset tiann/KernelSU "$tag" 'KernelSU.*\.apk$' || true)
-  [ -n "$url" ] || die "KernelSU $tag: no APK in the release"
+  need curl "install curl"; need unzip "install unzip"
+  local tag
+  tag=$(ksu_tag); [ -n "$tag" ] || die "no matching KernelSU manager"
   mkdir -p "$POST"
-  c "KernelSU manager ← $url"
-  curl -fL --progress-bar --max-time 900 -o "$POST/KernelSU.apk" "$url" || die "download failed"
+  ksu_download "$tag" "$POST/KernelSU.apk" || die "KernelSU $tag: download failed"
   if command -v adb >/dev/null && [ "$(adb get-state 2>/dev/null)" = device ]; then
-    adb install -r "$POST/KernelSU.apk" && c "KernelSU manager $tag installed"
+    adb install -r "$POST/KernelSU.apk" && c "KernelSU manager ($tag) installed"
   else
     c "Phone not connected – later: ./noxis.sh postinstall"
   fi
@@ -479,7 +506,18 @@ cmd_apps() {
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false
   install_apk TorBrowser        "$(tor_url)" false
   # The manager has to match the KernelSU in the kernel and be officially signed
-  install_apk KernelSU          "$(gh_tag_asset tiann/KernelSU "$(ksu_tag)" 'KernelSU.*\.apk$' || true)" false
+  local kt; kt=$(ksu_tag)
+  if [ "$kt" = main ]; then
+    # CI build: download, then register it like the other prebuilts
+    mkdir -p "$NOXIS/vendor/noxis/prebuilt/KernelSU"
+    if ksu_download main "$NOXIS/vendor/noxis/prebuilt/KernelSU/KernelSU.apk"; then
+      install_apk_bp KernelSU false
+    else
+      warn "KernelSU manager: download failed – skipped"
+    fi
+  else
+    install_apk KernelSU "$(gh_tag_asset tiann/KernelSU "$kt" 'KernelSU.*\.apk$' || true)" false
+  fi
   [ -d "$SRC/vendor" ] && cmd_vendor
   return 0
 }
