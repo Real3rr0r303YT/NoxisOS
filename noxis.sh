@@ -1097,6 +1097,16 @@ cmd_direkt() {
   fastboot snapshot-update cancel || warn "kein Snapshot offen"
   local slot="${NOXIS_SLOT:-a}"
   c "Slot $slot aktiv setzen"; fastboot --set-active="$slot"
+  # Platz in "super" schaffen: die logischen Partitionen des ANDEREN Slots
+  # (dort lag nur das kaputte Update bzw. altes Nothing OS) und Snapshot-Reste
+  # (*-cow) loeschen. Der eigene Slot wird gleich komplett neu geschrieben.
+  local anderer=b; [ "$slot" = b ] && anderer=a
+  local lp
+  for lp in $(fastboot getvar all 2>&1 | sed -n 's/.*(bootloader) is-logical:\([^:]*\):yes.*/\1/p' | sort -u); do
+    case "$lp" in
+      *_"$anderer"|*-cow) c "loesche $lp"; fastboot delete-logical-partition "$lp" || true ;;
+    esac
+  done
   for p in $logisch; do
     [ -f "$w/$p.img" ] || continue
     c "flash $p"
