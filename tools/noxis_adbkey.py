@@ -29,11 +29,11 @@ import zipfile
 LZ4_LEGACY = b"\x02\x21\x4c\x18"
 
 
-def cpio_newc(name, data, mode=0o100644):
-    """Ein newc-cpio-Archiv mit einer Datei plus TRAILER."""
+def cpio_newc(files):
+    """Ein newc-cpio-Archiv aus [(name, daten), ...] plus TRAILER."""
     out = b""
     ino = 0x4e58  # beliebig, nur eindeutig im Archiv
-    for n, d, m in ((name, data, mode), ("TRAILER!!!", b"", 0)):
+    for n, d, m in [(n, d, 0o100644) for n, d in files] + [("TRAILER!!!", b"", 0)]:
         nb = n.encode() + b"\0"
         hdr = "070701" + "".join(f"{v:08X}" for v in (
             ino, m, 0, 0, 1, 0, len(d), 0, 0, 0, 0, len(nb), 0))
@@ -43,6 +43,15 @@ def cpio_newc(name, data, mode=0o100644):
         rec += d + b"\0" * (-len(d) % 4)
         out += rec
     return out + b"\0" * (-len(out) % 512)
+
+
+# Android-eigener Weg, einen user-Build bei OFFENEM Bootloader debugbar zu
+# starten (first_stage_init: /force_debuggable -> /debug_ramdisk/adb_debug.prop
+# wird mit hoechster Prioritaet geladen). Bei gesperrtem Bootloader ignoriert
+# init das. Hier nur: ADB beim Start an, Schluessel bleibt Pflicht.
+ADB_DEBUG_PROP = b"""# Noxis OS debugadb - nur zur Fehlersuche
+persist.sys.usb.config=adb
+"""
 
 
 def lz4_legacy_literal(data):
@@ -58,7 +67,7 @@ def lz4_legacy_literal(data):
     return LZ4_LEGACY + struct.pack("<I", len(blk)) + blk
 
 
-def patch(img, key, mkb, out):
+def patch(img, files, mkb, out):
     with tempfile.TemporaryDirectory() as t:
         arg = subprocess.run(
             [sys.executable, os.path.join(mkb, "unpack_bootimg.py"), "--boot_img", img,
@@ -73,7 +82,7 @@ def patch(img, key, mkb, out):
             raise SystemExit(f"{img}: keine Ramdisk gefunden")
         rd = arg[arg.index("--ramdisk") + 1]
         orig = open(rd, "rb").read()
-        extra = cpio_newc("adb_keys", key)
+        extra = cpio_newc(files)
         if orig[:4] == LZ4_LEGACY:
             extra = lz4_legacy_literal(extra)
         elif orig[:2] == b"\x1f\x8b":
@@ -101,7 +110,10 @@ def main():
                 continue
             src = z.extract(f"{name}.img", t)
             dst = os.path.join(outdir, f"{name}-adb.img")
-            patch(src, key, mkb, dst)
+            files = [("adb_keys", key)]
+            if name == "init_boot":
+                files += [("force_debuggable", b""), ("adb_debug.prop", ADB_DEBUG_PROP)]
+            patch(src, files, mkb, dst)
             print(f"  {dst}")
 
 

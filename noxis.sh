@@ -872,8 +872,9 @@ flash_teil() {  # <partition> <image>
   fastboot "${fl[@]}" flash "$1" "$2"
 }
 
-# Debug: den ADB-Schluessel dieses PCs in init_boot + recovery einbauen, damit
-# "adb logcat" schon beim (haengenden) ersten Start geht. Nur zur Fehlersuche –
+# Debug: den ADB-Schluessel dieses PCs in init_boot + recovery einbauen und
+# ADB beim Start einschalten (Androids force_debuggable-Weg, wirkt nur bei
+# offenem Bootloader), damit "adb logcat" schon beim haengenden Start geht. Nur zur Fehlersuche –
 # danach mit ./noxis.sh flash wieder die normalen Images aufspielen.
 cmd_debugadb() {
   need fastboot "android-tools installieren"
@@ -886,6 +887,9 @@ cmd_debugadb() {
   [ -f "$mkb/mkbootimg.py" ] || die "$mkb fehlt (kommt mit ./noxis.sh sync)"
   c "PC-Schluessel in init_boot + recovery einbauen"
   python3 "$NOXIS/tools/noxis_adbkey.py" "$img" "$key" "$mkb" "$d" || die "Umbau fehlgeschlagen"
+  if ! fastboot devices | grep -q .; then
+    adb devices 2>/dev/null | grep -q "recovery$" && { c "Recovery → Bootloader"; adb reboot bootloader; sleep 8; }
+  fi
   fastboot devices | grep -q . || die "Handy nicht im Fastboot (Leiser + Power 15 s halten)"
   local p sl
   for p in init_boot recovery; do
