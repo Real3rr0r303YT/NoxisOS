@@ -7,7 +7,7 @@
 #
 #  ./noxis.sh check              Check the PC (RAM, disk, tools)
 #  ./noxis.sh sync               Fetch the source (--depth=1, ~110 GB) + add Noxis
-#  ./noxis.sh apps               Own apps, camera/PDF, Cromite, Mullvad, Tor, KernelSU manager
+#  ./noxis.sh apps               Own apps, camera/PDF, IronFox, Termux, Mullvad, Tor, KernelSU manager
 #  ./noxis.sh blobs <ota|dump>   Extract the vendor files from a Nothing OS OTA or dump
 #  ./noxis.sh blobs <ota> --regen
 #                                Same, but rewrite the file list from the dump -
@@ -19,7 +19,7 @@
 #  ./noxis.sh sign               Sign → OTA + images → Desktop, delete out/
 #  ./noxis.sh cleanup            ROM to the Desktop, delete out/ (NOXIS_KEEP_OUT=1 keeps it)
 #  ./noxis.sh flash              Install on the phone (guided, bootloader stays unlocked)
-#  ./noxis.sh postinstall        After the first boot: Mullvad/Tor/KernelSU via adb
+#  ./noxis.sh postinstall        After the first boot: Termux/Tor/... via adb
 #  ./noxis.sh ksu                KernelSU manager matching the kernel (installs via adb)
 #  ./noxis.sh publish            Upload the OTA as a GitHub release → phone: Settings → System → Updater
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
@@ -263,6 +263,7 @@ cmd_sync() {
 }
 
 cmd_vendor() {
+  drop_old_apps
   c "Copying vendor/noxis into the source tree"
   mkdir -p "$SRC/vendor/noxis"
   find "$SRC/vendor/noxis" -mindepth 1 -maxdepth 1 ! -name prebuilt -exec rm -rf {} +
@@ -328,6 +329,43 @@ EOF
   done
   rm -f "$dir/Fennec.apk.part"; rmdir "$dir" 2>/dev/null || true
   warn "Fennec: no arm64 APK found – browser skipped"
+}
+
+fdroid_apk() {  # <package> → URL of F-Droid's suggested APK (main repo)
+  local api code
+  api=$(curl -fsSL --max-time 60 "https://f-droid.org/api/v1/packages/$1") || return 1
+  code=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["suggestedVersionCode"])' "$api" 2>/dev/null) || return 1
+  [ -n "$code" ] && echo "https://f-droid.org/repo/$1_$code.apk"
+}
+
+install_post() {  # <name> <url> – user app, installed via adb after flashing
+  local name="$1" url="$2"
+  [ -n "$url" ] || { warn "$name: no download address found – skipped"; return 0; }
+  mkdir -p "$POST"
+  c "$name ← $url"
+  if curl -fL --progress-bar --connect-timeout 20 --max-time 1800 -o "$POST/$name.apk.part" "$url"; then
+    mv "$POST/$name.apk.part" "$POST/$name.apk"
+    c "  $name: installed after flashing (./noxis.sh postinstall)"
+  else
+    rm -f "$POST/$name.apk.part"; warn "$name: download failed – skipped"
+  fi
+  return 0
+}
+
+# IronFox: Firefox fork with uBlock Origin preinstalled and hardened defaults,
+# signed by the IronFox project. Newest arm64 build from their F-Droid repo.
+IRONFOX_REPO="https://fdroid.ironfoxoss.org/fdroid/repo"
+install_ironfox() {
+  local idx apk
+  idx=$(curl -fsSL --max-time 120 "$IRONFOX_REPO/index-v1.json") \
+    || { warn "IronFox: repo not reachable – skipped"; return 0; }
+  apk=$(python3 -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+p = [x for x in d["packages"].get("org.ironfoxoss.ironfox", []) if "arm64-v8a" in (x.get("nativecode") or [])]
+print(max(p, key=lambda x: x["versionCode"])["apkName"] if p else "")' <<<"$idx" 2>/dev/null) || apk=""
+  [ -n "$apk" ] || { warn "IronFox: no arm64 build in the repo – skipped"; return 0; }
+  install_apk IronFox "$IRONFOX_REPO/$apk" false
 }
 
 install_apk() {  # <name> <url> <privileged:true|false>
@@ -487,7 +525,7 @@ cmd_ksu() {
 # ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
 # name → LineageOS app it replaces (empty = added next to the stock app)
 NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
-NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery: NoxisLauncher:"
+NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery:"
 
 install_own_apps() {
   local base="${NOXIS_APPS_URL:-https://github.com/$NOXIS_APPS_REPO/releases/download/noxis-apps}" tmp entry name over dir
@@ -526,14 +564,31 @@ install_own_apps() {
   rm -r "$tmp"
 }
 
+# Apps that Noxis no longer ships: remove leftovers of earlier runs, otherwise
+# the old prebuilt in the source tree (cmd_vendor keeps prebuilt/) would still
+# end up in the image.
+NOXIS_DROPPED_APPS="Cromite NoxisLauncher"
+drop_old_apps() {
+  local n
+  for n in $NOXIS_DROPPED_APPS; do
+    if [ -e "$NOXIS/vendor/noxis/prebuilt/$n" ] || [ -e "$SRC/vendor/noxis/prebuilt/$n" ] || [ -e "$POST/$n.apk" ]; then
+      c "$n: no longer part of Noxis – removed"
+    fi
+    rm -rf "$NOXIS/vendor/noxis/prebuilt/$n" "$SRC/vendor/noxis/prebuilt/$n" "$POST/$n.apk"
+  done
+}
+
 cmd_apps() {
   need curl "install curl"
+  drop_old_apps
   install_own_apps
   install_apk GrapheneCamera    "$(gh_latest_asset GrapheneOS/Camera '\.apk$' || true)" false
   install_apk GraphenePdfViewer "$(gh_latest_asset GrapheneOS/PdfViewer '\.apk$' || true)" false
-  # Default browser: Cromite (hardened Chromium – site isolation, strong renderer sandbox)
-  install_apk Cromite           "$(gh_latest_asset uazo/cromite 'arm64_ChromePublic\.apk$' || true)" false
+  # Default browser: IronFox (hardened Firefox, uBlock Origin preinstalled)
+  install_ironfox
   install_fennec
+  # Termux: user app (own data dir, updates via F-Droid) → installed after flashing
+  install_post Termux "$(fdroid_apk com.termux || true)"
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false
   install_apk TorBrowser        "$(tor_url)" false
   # The manager has to match the KernelSU in the kernel and be officially signed

@@ -138,11 +138,10 @@ def p_version():
 
 # ------------------------------------------------------------ 6. Jelly raus, eigener Browser rein
 def p_browser():
-    # Standardbrowser ist Cromite; Fennec kommt zusaetzlich, wenn F-Droid
-    # eine arm64-Fassung hat. Jelly fliegt raus, sobald einer von beiden da
-    # ist - frueher hing das allein an Fennec, und faellt der aus, blieb
-    # Jelly drin, obwohl Cromite laengst installiert war.
-    da = [n for n in ("Cromite", "Fennec")
+    # Default browser is IronFox (Firefox + uBlock Origin); Fennec is added
+    # when F-Droid has an arm64 build. Jelly goes as soon as one of them is
+    # there.
+    da = [n for n in ("IronFox", "Fennec")
           if os.path.exists(path(f"vendor/noxis/prebuilt/{n}/{n}.apk"))]
     if not da:
         return ok("Browser Jelly replaced", "skipped (no browser present)")

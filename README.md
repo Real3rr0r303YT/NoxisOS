@@ -36,14 +36,14 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
 ```bash
 ./noxis.sh check                    # RAM ≥ 32 GB (or 16 + 32 GB swap), ~300 GB free during the build
 ./noxis.sh sync                     # LineageOS 24.0 (--depth=1) + Noxis manifest + patches
-./noxis.sh apps                     # own apps, camera, PDF, Cromite, Mullvad, Tor, KernelSU manager
+./noxis.sh apps                     # own apps, camera, PDF, IronFox, Termux, Mullvad, Tor, KernelSU
 ./noxis.sh blobs ~/Downloads/Asteroids-OTA.zip   # full Nothing OS OTA (B4.1-260928-1204)
                                     #   other Nothing OS version / extracted dump: NOXIS_OTHER_FIRMWARE=1
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
 ./noxis.sh build                    # user build (checks privileged permissions first)
 ./noxis.sh sign                     # → ROM on the desktop, out/ is deleted (NOXIS_KEEP_OUT=1 keeps it)
 ./noxis.sh flash                    # guided: boot images (both slots) → fastbootd → system partitions
-./noxis.sh postinstall              # after first boot: Mullvad + Tor Browser via adb (see below)
+./noxis.sh postinstall              # after first boot: Termux, Tor Browser … via adb (see below)
 ./noxis.sh publish                  # signed OTA → GitHub release → phone updates itself
 ```
 
@@ -86,9 +86,14 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | Notes | [NothingNotes](https://github.com/Real3rr0r303YT/NothingNotes) | – (added) |
 | Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added; set it as default phone app – the stock dialer stays for emergency calls) |
 | Battery | [NothingBattery](https://github.com/Real3rr0r303YT/NothingBattery) | – (added) |
-| **Home screen** | [NoxisLauncher](apps/NoxisLauncher) (in this repo) | – (added; pick it once as home app – Trebuchet stays for recents/gestures) |
 
-**NoxisLauncher:** dot-matrix clock, date, Noxis Guard shortcut, up to 6 pinned apps · swipe up = app drawer with search (also initials and package names) · swipe down = notifications · long press = launcher settings · long press an app = pin, hide, app info, uninstall · white monochrome icons in Nothing style · no internet permission.
+**Home screen:** LineageOS' own launcher (Trebuchet) – clean, with icon packs, grid size, hidden apps and themed icons.
+Want the One UI look? Install a One UI Home module in the KernelSU app yourself (e.g. [reiryuki/One-UI-Home-35-Magisk-Module](https://github.com/reiryuki/One-UI-Home-35-Magisk-Module)). Samsung's launcher is proprietary, so Noxis does not ship it, and those modules are made for older Android versions – on Android 17 it may not start.
+
+| Extra app | Source | How |
+|---|---|---|
+| **IronFox** (default browser) | [IronFox F-Droid repo](https://fdroid.ironfoxoss.org/fdroid/repo) | Firefox fork with **uBlock Origin preinstalled**, hardened settings, no telemetry – in the image |
+| **Termux** | [F-Droid](https://f-droid.org/packages/com.termux/) | terminal with packages (`pkg install …`) – installed by `./noxis.sh postinstall` as a normal, updatable app |
 
 ## 1. Build manifest (`manifest/noxis.xml`)
 
@@ -118,7 +123,7 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS" with the Noxis logo instead of LineageOS |
 | About phone | `version.mk` + `NoxisLineageSdkOverlay` | "NoxisOS version: Noxis-1.0-DATE-asteroids" instead of "LineageOS version: 24.0-…-UNOFFICIAL" |
 | System updates | `NoxisUpdaterOverlay` | "NoxisOS" instead of "LineageOS 24.0" in the Updater |
-| Browser | `vendor/lineage/config/common.mk` | Jelly out; **Cromite** (hardened Chromium: site isolation, strong renderer sandbox) is the default browser, Firefox (Fennec) stays available |
+| Browser | `vendor/lineage/config/common.mk` | Jelly out; **IronFox** (hardened Firefox with uBlock Origin) is the default browser, Firefox (Fennec) stays available |
 
 ## 3. KernelSU – root per app
 
@@ -138,9 +143,10 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 | App | Network | Wi-Fi | Mobile | VPN | Background | Root |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Mullvad VPN | ✓ | ✓ | ✓ | – | ✓ | ✗ |
-| Cromite (default browser) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| IronFox (default browser) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Firefox (Fennec) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Termux | ✓ | ✓ | ✓ | ✓ | ✗ | only if you allow it |
 | GrapheneOS Camera | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | PDF Viewer | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Gallery, Calculator, Clock, Notes, Calendar, Battery | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -206,7 +212,7 @@ The script walks you through every step. Everything is written directly with fas
 ### After the first boot
 
 ```bash
-./noxis.sh postinstall    # USB debugging on → installs Mullvad VPN, Tor Browser, KernelSU manager via adb
+./noxis.sh postinstall    # USB debugging on → installs Termux, Tor Browser, KernelSU manager (and whatever else is in postinstall/) via adb
 ```
 
 Some vendor-signed APKs (Tor Browser, the KernelSU manager, sometimes Mullvad) ship **compressed native libraries**. Android 17 only accepts pre-signed system apps with uncompressed libraries, and repacking would break the vendor's signature. `./noxis.sh build` detects this, keeps those apps out of the image and stores them in `postinstall/`; `./noxis.sh postinstall` installs them as normal, still updatable apps.

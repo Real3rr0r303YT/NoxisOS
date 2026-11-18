@@ -33,8 +33,8 @@ endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GraphenePdfViewer/GraphenePdfViewer.apk),)
 PRODUCT_PACKAGES += GraphenePdfViewer
 endif
-ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/Cromite/Cromite.apk),)
-PRODUCT_PACKAGES += Cromite
+ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/IronFox/IronFox.apk),)
+PRODUCT_PACKAGES += IronFox
 endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/Fennec/Fennec.apk),)
 PRODUCT_PACKAGES += Fennec
@@ -52,7 +52,7 @@ endif
 
 # 3rr0r's own apps (Nothing design, built from source by the "Noxis apps" GitHub Action)
 # They replace LineageOS' calendar, clock and calculator; phone/notes/battery are added.
-NOXIS_OWN_APPS := NoxisCalendar NoxisClock NoxisCalculator NoxisNotes NoxisCall NoxisBattery NoxisLauncher
+NOXIS_OWN_APPS := NoxisCalendar NoxisClock NoxisCalculator NoxisNotes NoxisCall NoxisBattery
 PRODUCT_PACKAGES += $(foreach a,$(NOXIS_OWN_APPS),$(if $(wildcard $(NOXIS_PATH)/prebuilt/$(a)/$(a).apk),$(a)))
 
 # eSIM ohne Google

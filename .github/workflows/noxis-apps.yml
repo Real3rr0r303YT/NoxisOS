@@ -29,7 +29,6 @@ jobs:
           - { name: NoxisCalculator, repo: Real3rr0r303YT/Calculator }
           - { name: NoxisCall,       repo: Real3rr0r303YT/NothingCall }
           - { name: NoxisBattery,    repo: Real3rr0r303YT/NothingBattery }
-          - { name: NoxisLauncher,   repo: Real3rr0r303YT/NoxisOS, dir: apps/NoxisLauncher, tests: true }
     steps:
       - uses: actions/checkout@v4
         with:

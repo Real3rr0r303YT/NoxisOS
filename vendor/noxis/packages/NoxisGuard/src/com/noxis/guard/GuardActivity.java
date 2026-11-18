@@ -139,7 +139,7 @@ public class GuardActivity extends Activity {
                 getPackageManager().getLaunchIntentForPackage("me.weishu.kernelsu"));
         link("Netzwerkzugriff pro App", "App antippen → Mobile Daten & WLAN → Netzwerkzugriff",
                 new Intent(Settings.ACTION_APPLICATION_SETTINGS));
-        link("Standard-Apps (Browser, Telefon)", "Empfohlen: Cromite als Browser, NothingCall als Telefon",
+        link("Standard-Apps (Browser, Telefon)", "Empfohlen: IronFox als Browser, NothingCall als Telefon",
                 new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
         link("Systemupdates", "Noxis-Updates von GitHub, signiert mit deinem Schlüssel",
                 getPackageManager().getLaunchIntentForPackage("org.lineageos.updater"));
