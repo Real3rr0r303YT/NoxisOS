@@ -87,6 +87,7 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | Notes | [NothingNotes](https://github.com/Real3rr0r303YT/NothingNotes) | – (added) |
 | Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added; set it as default phone app – the stock dialer stays for emergency calls) |
 | Battery | [NothingBattery](https://github.com/Real3rr0r303YT/NothingBattery) | – (added) |
+| APK/IPA toolkit | [NothingPacker](https://github.com/Real3rr0r303YT/NothingPacker) | – (added) |
 
 **Home screen:** LineageOS' own launcher (Trebuchet) – clean, with icon packs, grid size, hidden apps and themed icons.
 Want the One UI look? Install a One UI Home module in the KernelSU app yourself (e.g. [reiryuki/One-UI-Home-35-Magisk-Module](https://github.com/reiryuki/One-UI-Home-35-Magisk-Module)). Samsung's launcher is proprietary, so Noxis does not ship it, and those modules are made for older Android versions – on Android 17 it may not start.
@@ -153,7 +154,7 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 | Termux | ✓ | ✓ | ✓ | ✓ | ✗ | only if you allow it |
 | GrapheneOS Camera | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | PDF Viewer | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Gallery, Calculator, Clock, Notes, Calendar, Battery | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Gallery, Calculator, Clock, Notes, Calendar, Battery, Packer | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | NothingCall (phone) | system (cellular) | | | | | ✗ |
 | Phone, SMS | system (cellular) | | | | | ✗ |
 | KernelSU manager | ✗ | ✗ | ✗ | ✗ | ✗ | – |
