@@ -966,11 +966,26 @@ cmd_sysextfix() {
   local w="$REL/sysextfix"; sudo rm -rf "$w"; mkdir -p "$w"
   c "system_ext.img auspacken"
   unzip -q -o "$img" system_ext.img init_boot.img recovery.img -d "$w" || die "system_ext.img nicht im Paket"
-  python3 - "$w/system_ext.img" <<'PY' || die "system_ext.img ist kein EROFS – dieser Fix geht nur mit EROFS"
+  # img.zip enthaelt oft "sparse"-Images (Android-Format) – erst entpacken
+  local typ
+  typ=$(python3 - "$w/system_ext.img" <<'PY'
 import sys
 with open(sys.argv[1], "rb") as f:
-    f.seek(1024); sys.exit(0 if f.read(4) == bytes.fromhex("e2e1f5e0") else 1)
+    head = f.read(4); f.seek(1024); sb = f.read(4); f.seek(1080); e4 = f.read(2)
+if head == bytes.fromhex("3aff26ed"): print("sparse")
+elif sb == bytes.fromhex("e2e1f5e0"): print("erofs")
+elif e4 == bytes.fromhex("53ef"): print("ext4")
+else: print("unbekannt:" + head.hex())
 PY
+)
+  if [ "$typ" = sparse ]; then
+    need simg2img "dev-util/android-tools installieren (enthaelt simg2img)"
+    c "Sparse-Image entpacken"
+    simg2img "$w/system_ext.img" "$w/system_ext.raw" && mv -f "$w/system_ext.raw" "$w/system_ext.img"
+    typ=$(python3 -c "import sys;f=open(sys.argv[1],'rb');f.seek(1024);print('erofs' if f.read(4)==bytes.fromhex('e2e1f5e0') else 'anders')" "$w/system_ext.img")
+  fi
+  c "Dateisystem: $typ"
+  [ "$typ" = erofs ] || die "system_ext.img ist $typ, nicht EROFS – bitte Ausgabe an Claude schicken"
   sudo fsck.erofs --extract="$w/root" --xattrs --preserve "$w/system_ext.img" >/dev/null \
     || die "Auspacken fehlgeschlagen"
   local x="$w/root/etc/permissions/privapp-permissions-noxis.xml"
