@@ -1070,6 +1070,45 @@ PY
   c "Handy startet – erster Start 5-15 Minuten"
 }
 
+# Noxis direkt per fastbootd in einen Slot schreiben – ohne Update-Paket
+# (adb sideload). Noetig, wenn das Update auf dem anderen Slot nie erfolgreich
+# gestartet hat: dann haengt dort ein nicht zusammengefuehrter Snapshot, und
+# nach "Format data" sind dessen Daten weg. Nimmt ein repariertes
+# system_ext (./noxis.sh sysextfix), falls vorhanden.
+cmd_direkt() {
+  need fastboot "android-tools installieren"
+  local img; img=$(latest img.zip)
+  [ -f "$img" ] || die "Erst ./noxis.sh sign"
+  local w="$REL/direkt"; rm -rf "$w"; mkdir -p "$w"
+  local logisch="system system_ext product vendor odm system_dlkm vendor_dlkm odm_dlkm"
+  c "Images auspacken"
+  local p
+  for p in $logisch; do unzip -q -o "$img" "$p.img" -d "$w" 2>/dev/null || true; done
+  local fix="$REL/sysextfix/system_ext-fix.img"
+  [ -f "$fix" ] && { c "repariertes system_ext verwenden"; cp -f "$fix" "$w/system_ext.img"; }
+  ls -la "$w"
+
+  if ! fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes"; then
+    fastboot devices | grep -q . || die "Handy nicht im Fastboot (Leiser + Power halten)"
+    c "→ fastbootd"; fastboot reboot fastboot
+  fi
+  fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes" || die "fastbootd nicht erreicht"
+  c "Haengendes Update (Snapshot) verwerfen"
+  fastboot snapshot-update cancel || warn "kein Snapshot offen"
+  local slot="${NOXIS_SLOT:-a}"
+  c "Slot $slot aktiv setzen"; fastboot --set-active="$slot"
+  for p in $logisch; do
+    [ -f "$w/$p.img" ] || continue
+    c "flash $p"
+    fastboot flash "$p" "$w/$p.img" || die "$p ging nicht – Ausgabe an Claude schicken"
+  done
+  c "Daten loeschen (frischer Start)"
+  fastboot -w || warn "fastboot -w ging nicht – dann in der Recovery: Format data"
+  rm -rf "$w"
+  fastboot reboot
+  c "Handy startet Noxis aus Slot $slot – erster Start 5-15 Minuten"
+}
+
 cmd_all() {
   [ -n "${1:-}" ] || die "./noxis.sh all <nothing-os-ota.zip>"
   cmd_check; cmd_sync; cmd_apps; cmd_blobs "$1"; cmd_keys; cmd_build; cmd_sign
@@ -1090,6 +1129,7 @@ case "${1:-}" in
   debugadb) cmd_debugadb ;;
   bootfix) cmd_bootfix ;;
   sysextfix) cmd_sysextfix ;;
+  direkt) cmd_direkt ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
