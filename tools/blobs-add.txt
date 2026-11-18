@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Noxis OS – Made by 3rr0r303YT on TikTok
+# https://github.com/Real3rr0r303YT/NoxisOS
+#
+# Vendor files that newer Nothing OS versions need but that are still
+# missing in the device tree's proprietary-files.txt. ./noxis.sh blobs adds
+# them before the extraction - but only if the file really exists in the
+# dump. On an older version that does not have it nothing happens.
+#
+# How to tell something is missing here: the build stops after seconds
+# with   "X" depends on undefined module "Y"   - then Y.so belongs here.
+
+# (currently empty)
+#
+# Careful with module names with a suffix like "-nt": they often do not come
+# from the dump but from a rename entry 'source:target' in the device tree.
+# If such a module is missing, the list is usually damaged (e.g. by --regen)
+# - then reset proprietary-files.txt with 'git checkout' instead of adding
+# something here.

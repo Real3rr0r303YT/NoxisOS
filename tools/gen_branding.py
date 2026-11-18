@@ -170,7 +170,24 @@ def wallpaper(path, W=1440, H=3120):
     img.save(path, "PNG", optimize=True)
     return img
 
+def setupwizard_logo(path, W=1024, H=520):
+    """Logo for the setup wizard's welcome page (replaces the LineageOS logo).
+    Mark on a dark round badge on a transparent canvas, so it is visible in
+    light and dark theme alike."""
+    img = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    r = int(H * 0.46) * SS
+    cx, cy = W * SS // 2, H * SS // 2
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(10, 12, 18, 255))
+    img = img.resize((W, H), Image.LANCZOS)
+    m = draw_mark(int(H * 0.86), 1.0)
+    if m.width != int(H * 0.86):
+        m = m.resize((int(H * 0.86), int(H * 0.86)), Image.LANCZOS)
+    img.alpha_composite(m, ((W - m.width) // 2, (H - m.height) // 2))
+    img.save(path)
+
 if __name__ == "__main__":
+    setupwizard_logo(f"{OUT}/setupwizard-logo.png")
     logo = draw_mark(1024, 1.0)
     bg = Image.new("RGBA", (1024, 1024), (0, 0, 0, 255)); bg.alpha_composite(logo); bg.convert("RGB").save(f"{OUT}/noxis-logo.png")
     a, b = bootanimation(f"{OUT}/bootanimation.zip")

@@ -1,140 +1,152 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Noxis OS – Copyright (C) 2026 3rr0r (Real3rr0r303YT) – Made by 3rr0r303YT on TikTok
 # ============================================================
-#  Noxis OS – Build-Werkzeug (Android 17 / LineageOS 24.0)
-#  Gerät: Nothing Phone (3a) / (3a) Pro  –  "asteroids"
+#  Noxis OS – build tool (Android 17 / LineageOS 24.0)
+#  Device: Nothing Phone (3a) / (3a) Pro  –  "asteroids"
 #
-#  ./noxis.sh check              Rechner prüfen (RAM, Platte, Tools)
-#  ./noxis.sh sync               Quellcode holen (--depth=1, ~110 GB) + Noxis einbinden
-#  ./noxis.sh apps               Kamera/PDF, Firefox (Fennec), Mullvad, Tor, KernelSU-Manager
-#  ./noxis.sh blobs <ota.zip>    Herstellerdateien aus Nothing-OS-OTA ziehen
-#  ./noxis.sh blobs <ota.zip> --neu
-#                                dto., aber die Dateiliste aus dem Abzug neu
-#                                schreiben - noetig, wenn der Abzug ein
-#                                anderer Nothing-OS-Stand ist als der Baum
-#  ./noxis.sh keys               Eigene Signaturschlüssel
-#  ./noxis.sh build              Kompilieren (user-Build, KernelSU im Kernel)
-#  ./noxis.sh opsec              Gebautes Image gegen die OPSEC-Regeln prüfen
-#  ./noxis.sh sign               Signieren → OTA + Images → Desktop, out/ löschen
-#  ./noxis.sh cleanup            ROM auf den Desktop, out/ löschen (NOXIS_KEEP_OUT=1 behält)
-#  ./noxis.sh flash              Aufs Handy installieren (geführt, Bootloader bleibt offen)
-#  ./noxis.sh nachinstall        Nach dem ersten Start: Mullvad/Tor per adb
-#  ./noxis.sh publish            OTA als GitHub-Release hochladen → Handy: Einstellungen → System → Updater
+#  ./noxis.sh check              Check the PC (RAM, disk, tools)
+#  ./noxis.sh sync               Fetch the source (--depth=1, ~110 GB) + add Noxis
+#  ./noxis.sh apps               Own apps, camera/PDF, Cromite, Mullvad, Tor, KernelSU manager
+#  ./noxis.sh blobs <ota|dump>   Extract the vendor files from a Nothing OS OTA or dump
+#  ./noxis.sh blobs <ota> --regen
+#                                Same, but rewrite the file list from the dump -
+#                                needed when the dump is a different Nothing OS
+#                                version than the device tree expects
+#  ./noxis.sh keys               Create your own signing keys
+#  ./noxis.sh build              Compile (user build, KernelSU in the kernel)
+#  ./noxis.sh opsec              Check the built image against the OPSEC rules
+#  ./noxis.sh sign               Sign → OTA + images → Desktop, delete out/
+#  ./noxis.sh cleanup            ROM to the Desktop, delete out/ (NOXIS_KEEP_OUT=1 keeps it)
+#  ./noxis.sh flash              Install on the phone (guided, bootloader stays unlocked)
+#  ./noxis.sh postinstall        After the first boot: Mullvad/Tor via adb
+#  ./noxis.sh publish            Upload the OTA as a GitHub release → phone: Settings → System → Updater
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
+#
+#  Repair / debugging (no rebuild needed):
+#  ./noxis.sh direct             Write only the system partitions again (fastbootd)
+#  ./noxis.sh sysextfix          Add missing privapp permissions to system_ext.img
+#  ./noxis.sh debugadb           ADB from the first second of boot (to read logcat)
 # ============================================================
 set -Eeuo pipefail
-# Bricht das Skript an einer Stelle ab, die keine eigene Meldung hat, soll
-# man das sehen - mit Zeile und Befehl. Ohne das endet es stumm, und der
-# naechste Schritt laeuft mit altem Stand weiter, als waere nichts gewesen.
-trap 'printf "\033[1;31m[fehler]\033[0m unerwarteter Abbruch in noxis.sh Zeile %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
+# If the script stops somewhere without its own message, show where - line
+# and command. Otherwise it ends silently and the next step carries on with
+# an old state as if nothing happened.
+trap 'printf "\033[1;31m[error]\033[0m unexpected stop in noxis.sh line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
 NOXIS="$(cd "$(dirname "$0")" && pwd)"
 SRC="${NOXIS_SRC:-$HOME/noxis-src}"
 KEYS="${NOXIS_KEYS:-$HOME/.noxis-keys}"
-# Nicht OUT nennen: envsetup.sh von LineageOS setzt OUT auf out/target/product/...
-# und haette die fertige ROM sonst dorthin umgeleitet (wird danach geloescht).
+# Not called OUT: LineageOS' envsetup.sh sets OUT to out/target/product/...
+# and would redirect the finished ROM there (which gets deleted afterwards).
 REL="${NOXIS_OUT:-$NOXIS/release}"
 BRANCH="lineage-24.0"
 DEVICE="asteroids"
-# NOXIS_DEBUG=1: userdebug + ADB ab dem ersten Start ohne Freigabe - nur
-# zur Fehlersuche (Bootschleife), nie fuer den Alltag.
+# NOXIS_DEBUG=1: userdebug + ADB from the first boot without the approval
+# dialog - only for debugging (boot loops), never for daily use.
 if [ "${NOXIS_DEBUG:-0}" = 1 ]; then VARIANT="${NOXIS_VARIANT:-userdebug}"; else VARIANT="${NOXIS_VARIANT:-user}"; fi
 export NOXIS_DEBUG="${NOXIS_DEBUG:-0}"
 SUBJECT="${NOXIS_SUBJECT:-/C=DE/O=Noxis OS/OU=Noxis/CN=Noxis OS}"
 KSU_TAG="${NOXIS_KSU_TAG:-v3.3.1}"
+# Old (German) variable names keep working
+NOXIS_OTHER_FIRMWARE="${NOXIS_OTHER_FIRMWARE:-${NOXIS_ANDERER_STAND:-0}}"
 
 c()    { printf '\033[38;5;111m[noxis]\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m[warn]\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[31m[fehler]\033[0m %s\n' "$*" >&2; exit 1; }
-need() { command -v "$1" >/dev/null 2>&1 || die "$1 fehlt – $2"; }
-confirm() { read -rp "$1 [ja/N] " a; [ "$a" = "ja" ]; }
+die()  { printf '\033[31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "$1 is missing – $2"; }
+confirm() { read -rp "$1 [yes/N] " a; case "${a,,}" in yes|y|ja|j) return 0 ;; *) return 1 ;; esac; }
 
 envsetup() {
   cd "$SRC"
-  # LineageOS-Skripte lassen Befehle absichtlich fehlschlagen; die Falle von
-  # oben wuerde dort Fehlalarm geben. Ab hier meldet die() echte Fehler.
+  # LineageOS' scripts let commands fail on purpose; the trap above would
+  # raise false alarms there. From here on die() reports real errors.
   trap - ERR
   set +Eu
   # shellcheck disable=SC1091
   source build/envsetup.sh >/dev/null
-  breakfast "$DEVICE" "$VARIANT" >/dev/null || die "breakfast $DEVICE $VARIANT fehlgeschlagen"
+  breakfast "$DEVICE" "$VARIANT" >/dev/null || die "breakfast $DEVICE $VARIANT failed"
   set -u
 }
 
-# Die Soong-Analyse ist ein einzelner Prozess mit 15-20 GB. Mit wenig RAM
-# schiesst der Kernel ihn ab ("signal: killed"), auch wenn die Swapdatei
-# frei ist - sie ist zu langsam. Komprimierter Swap im RAM (zram) reicht.
-# Gilt bis zum Neustart; ist er schon da, passiert nichts.
-zram_an() {
+# The Soong analysis is a single process with 15-20 GB. With little RAM the
+# kernel kills it ("signal: killed") even when the swap file is free - it is
+# too slow. Compressed swap in RAM (zram) is enough. Lasts until reboot; if
+# it is already there nothing happens.
+zram_on() {
   local ram
   ram=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
   [ "$ram" -ge 32 ] && return 0
   if grep -q '^/dev/zram' /proc/swaps; then
-    c "zram-Swap schon aktiv"
+    c "zram swap already active"
   else
-    c "Wenig RAM ($ram GB): richte 20 GB zram-Swap ein (sudo-Passwort)"
+    c "Little RAM ($ram GB): setting up 20 GB zram swap (sudo password)"
     local z
     sudo modprobe zram \
       && z=$(sudo zramctl --find --size 20G --algorithm zstd) \
       && sudo mkswap "$z" >/dev/null && sudo swapon -p 100 "$z" \
-      || { warn "zram ging nicht – die Analyse kann abgeschossen werden (signal: killed)"; return 0; }
+      || { warn "zram failed – the analysis may get killed (signal: killed)"; return 0; }
   fi
   sudo sysctl -q vm.swappiness=180 vm.watermark_scale_factor=200 vm.page-cluster=0 || true
 }
 
-# Einige Projekte (u.a. external/chromium-webview) liegen als Git-LFS vor.
-# Ohne git-lfs beim Sync bleiben dort nur kleine Textzeiger statt der APKs,
-# und der Bau scheitert erst nach Stunden ("aapt2 dump badging ... webview.apk").
-lfs_holen() {
-  command -v git-lfs >/dev/null 2>&1 || die "git-lfs fehlt.
+# Some projects (e.g. external/chromium-webview) are stored with Git LFS.
+# Without git-lfs during the sync only small text pointers end up there
+# instead of the APKs, and the build fails hours later
+# ("aapt2 dump badging ... webview.apk").
+lfs_fetch() {
+  command -v git-lfs >/dev/null 2>&1 || die "git-lfs is missing.
        Gentoo: sudo emerge --ask dev-vcs/git-lfs   Debian/Ubuntu: sudo apt install git-lfs"
   git lfs install --skip-repo >/dev/null
-  c "Git-LFS-Dateien holen (WebView usw.)"
+  c "Fetching Git LFS files (WebView etc.)"
   ( cd "$SRC" && repo forall -j4 -c 'git lfs pull >/dev/null 2>&1 || true' )
 }
 
-# Prueft vor dem Bauen, ob noch LFS-Zeiger statt echter Dateien da sind.
-lfs_pruefen() {
+# Before building: are there still LFS pointers instead of real files?
+lfs_check() {
   local apk="$SRC/external/chromium-webview/prebuilt/arm64/webview.apk"
   if [ -f "$apk" ] && head -c 40 "$apk" | grep -q "git-lfs"; then
-    warn "WebView ist nur ein Git-LFS-Zeiger – hole die echten Dateien"
-    lfs_holen
-    head -c 40 "$apk" | grep -q "git-lfs" && die "WebView immer noch nicht geladen – Internet pruefen, dann nochmal"
+    warn "WebView is only a Git LFS pointer – fetching the real files"
+    lfs_fetch
+    head -c 40 "$apk" | grep -q "git-lfs" && die "WebView still not downloaded – check the internet connection, then try again"
   fi
   return 0
 }
 
-# Vorsignierte Fremd-APKs (Tor Browser, Mullvad ...) muessen unveraendert
-# ins System. Android 17 verlangt dafuer unkomprimierte .so-Bibliotheken; manche
-# Hersteller liefern sie aber komprimiert aus ("Contains compressed JNI
-# libraries"). Umpacken wuerde ihre Signatur zerstoeren. Solche Apps kommen
-# deshalb nicht ins Image, sondern werden nach dem Flashen per adb installiert
-# (./noxis.sh nachinstall) - sie bleiben so original signiert und updatebar.
-NACH="$NOXIS/nachinstallieren"
-apks_pruefen() {
+# Pre-signed third-party APKs (Tor Browser, Mullvad ...) have to go into the
+# system unchanged. Android 17 requires uncompressed .so libraries for that;
+# some vendors ship them compressed ("Contains compressed JNI libraries").
+# Repacking would destroy their signature. Such apps therefore do not go
+# into the image but are installed via adb after flashing
+# (./noxis.sh postinstall) - they stay originally signed and updatable.
+POST="$NOXIS/postinstall"
+apks_check() {
   local d name apk
   for d in "$SRC/vendor/noxis/prebuilt"/*/; do
     name=$(basename "$d"); apk="$d$name.apk"
     [ -f "$apk" ] && grep -qs "preprocessed: true" "$d/Android.bp" || continue
     if unzip -v "$apk" 2>/dev/null | awk '$NF ~ /^lib\/.*\.so$/ && $2 != "Stored" {f=1} END {exit !f}'; then
-      mkdir -p "$NACH"
-      cp -f "$apk" "$NACH/$name.apk"
+      mkdir -p "$POST"
+      cp -f "$apk" "$POST/$name.apk"
       rm -rf "$d" "$NOXIS/vendor/noxis/prebuilt/$name"
-      warn "$name hat komprimierte Bibliotheken – kommt nicht ins Image,
-       sondern nach dem Flashen per ./noxis.sh nachinstall"
+      warn "$name has compressed libraries – it does not go into the image,
+       it is installed after flashing with ./noxis.sh postinstall"
     fi
   done
   return 0
 }
 
-cmd_nachinstall() {
-  need adb "android-tools installieren"
-  ls "$NACH"/*.apk >/dev/null 2>&1 || { c "Nichts nachzuinstallieren"; return 0; }
-  c "Handy mit USB-Debugging verbinden (Einstellungen → Entwickleroptionen)"
+cmd_postinstall() {
+  need adb "install android-tools"
+  # old folder name from earlier versions
+  [ -d "$NOXIS/nachinstallieren" ] && { mkdir -p "$POST"; mv -n "$NOXIS/nachinstallieren"/*.apk "$POST"/ 2>/dev/null || true; }
+  ls "$POST"/*.apk >/dev/null 2>&1 || { c "Nothing to install"; return 0; }
+  c "Connect the phone with USB debugging (Settings → Developer options)"
   adb wait-for-device
   local a
-  for a in "$NACH"/*.apk; do
-    c "installiere $(basename "$a" .apk)"
-    adb install -r "$a" || warn "$(basename "$a") ging nicht"
+  for a in "$POST"/*.apk; do
+    c "installing $(basename "$a" .apk)"
+    adb install -r "$a" || warn "$(basename "$a") failed"
   done
 }
 
@@ -143,43 +155,41 @@ cmd_check() {
   local ram disk
   ram=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
   disk=$(df -BG --output=avail "$(dirname "$SRC")" | tail -1 | tr -dc 0-9)
-  c "RAM: ${ram} GB (empfohlen 32+, mit 16 GB nur mit 32 GB Swap)"
-  c "Freier Platz bei $(dirname "$SRC"): ${disk} GB (nötig ~400 GB)"
+  c "RAM: ${ram} GB (32+ recommended, 16 GB only with 32 GB swap)"
+  c "Free space at $(dirname "$SRC"): ${disk} GB (~400 GB needed)"
   local swap
   swap=$(awk '/SwapTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
   c "Swap: ${swap} GB"
   if [ "$ram" -lt 24 ]; then
-    warn "Wenig RAM. Der Bau laeuft trotzdem, aber mit $(( ram / 4 )) statt $(nproc) Jobs und entsprechend langsam."
-    [ $(( ram + swap )) -lt 32 ] && warn "RAM + Swap unter 32 GB – einzelne Uebersetzer koennen abgeschossen werden.
-       Swapdatei anlegen:
+    warn "Little RAM. The build still works, but with fewer jobs than $(nproc) and correspondingly slow."
+    [ $(( ram + swap )) -lt 32 ] && warn "RAM + swap below 32 GB – single compilers may get killed.
+       Create a swap file:
          sudo fallocate -l 32G /swapfile && sudo chmod 600 /swapfile
          sudo mkswap /swapfile && sudo swapon /swapfile"
   fi
   if [ "$disk" -lt 350 ]; then
-    warn "Zu wenig Platz: ${disk} GB da, etwa 400 GB noetig (110 GB Quellcode, Rest out/ und ccache).
-       Das bricht erst nach Stunden ab. Was am meisten belegt:
-         sudo du -sh /var/lib/docker ~/Desktop/noxis-linux ~/noxis-backup 2>/dev/null
-       Docker-Volume vom Linux-Bau loeschen (wird beim naechsten Bau neu geholt):
-         sudo docker volume rm noxis-kernel && sudo docker system prune -af"
+    warn "Not enough space: ${disk} GB free, about 400 GB needed (110 GB source, the rest out/).
+       This only fails after hours. What uses the most:
+         du -xh --max-depth=1 \$HOME | sort -rh | head"
   fi
   if ! git config --global user.name >/dev/null 2>&1 \
      || ! git config --global user.email >/dev/null 2>&1; then
-    warn "Git-Identitaet fehlt - repo bricht sonst beim sync ab:
-         git config --global user.name \"DEIN-NAME\"
-         git config --global user.email \"DEIN-NAME@users.noreply.github.com\""
+    warn "Git identity missing - repo stops during sync without it:
+         git config --global user.name \"YOUR-NAME\"
+         git config --global user.email \"YOUR-NAME@users.noreply.github.com\""
   fi
-  for t in git git-lfs python3 curl zip unzip openssl ccache fastboot adb fsck.erofs; do
+  for t in git git-lfs python3 curl zip unzip openssl fastboot adb simg2img fsck.erofs; do
     command -v "$t" >/dev/null && echo "  ✓ $t" || echo "  ✗ $t"
   done
   command -v repo >/dev/null && echo "  ✓ repo" || echo "  ✗ repo  →  curl -o ~/.local/bin/repo https://storage.googleapis.com/git-repo-downloads/repo && chmod +x ~/.local/bin/repo"
   cat <<'EOF'
 
-Pakete:
-  Gentoo:  emerge -av dev-vcs/git dev-vcs/git-lfs dev-util/ccache app-arch/zip app-arch/unzip \
-           sys-fs/erofs-utils \
+Packages:
+  Gentoo:  emerge -av dev-vcs/git dev-vcs/git-lfs app-arch/zip app-arch/unzip \
+           sys-fs/erofs-utils sys-fs/e2fsprogs \
            dev-lang/python sys-devel/bc sys-devel/bison sys-devel/flex dev-libs/openssl \
            app-arch/lz4 dev-util/android-tools sys-libs/ncurses media-gfx/imagemagick
-  Ubuntu:  sudo apt install erofs-utils bc bison build-essential ccache curl flex g++-multilib gcc-multilib git \
+  Ubuntu:  sudo apt install erofs-utils bc bison build-essential curl flex g++-multilib gcc-multilib git \
            git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool \
            lz4 libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool \
            squashfs-tools xsltproc zip zlib1g-dev python3 android-sdk-libsparse-utils
@@ -187,79 +197,76 @@ EOF
 }
 
 # ------------------------------------------------------------ sync
-# Platz dort pruefen, wo wirklich gebaut wird. Ein Android-Bau laeuft stunden-
-# bis tagelang; wenn die Platte dabei volllaeuft, ist die ganze Zeit verloren.
-# Lieber hier abbrechen. NOXIS_SRC zeigt auf eine andere Platte, wenn die
-# Systemplatte zu klein ist.
-need_space() {  # $1 = Pfad, $2 = noetige GB, $3 = wofuer
+# Check the space where the build really happens. An Android build runs for
+# hours to days; if the disk fills up during it, all that time is lost.
+# Better stop here. Point NOXIS_SRC to another disk if the system disk is
+# too small.
+need_space() {  # $1 = path, $2 = GB needed, $3 = what for
   local free
   mkdir -p "$1" 2>/dev/null || true
   free=$(df -BG --output=avail "$1" 2>/dev/null | tail -1 | tr -dc 0-9)
   [ -n "$free" ] || return 0
   if [ "$free" -lt "$2" ]; then
-    die "Zu wenig Platz fuer $3: $free GB frei unter $1, noetig etwa $2 GB.
-       Andere Platte nehmen:  export NOXIS_SRC=/pfad/zur/platte/noxis-src
-       Belegung ansehen:      du -xh --max-depth=1 \$HOME | sort -rh | head
-       Pruefung uebergehen:   NOXIS_SKIP_SPACE=1 (auf eigenes Risiko)"
+    die "Not enough space for $3: $free GB free at $1, about $2 GB needed.
+       Use another disk:     export NOXIS_SRC=/path/to/disk/noxis-src
+       See what uses space:  du -xh --max-depth=1 \$HOME | sort -rh | head
+       Skip this check:      NOXIS_SKIP_SPACE=1 (at your own risk)"
   fi
-  c "Platz unter $1: $free GB frei"
+  c "Space at $1: $free GB free"
 }
 
-# repo legt im Manifest-Baum eigene Commits an und braucht dafuer eine
-# globale Identitaet. Fehlt sie, bricht es erst nach dem Initialisieren ab -
-# also vorher fragen.
-git_identitaet() {
+# repo creates its own commits in the manifest tree and needs a global
+# identity for that. Without it, it only fails after initialising - so ask
+# up front.
+git_identity() {
   git config --global user.name >/dev/null 2>&1 \
     && git config --global user.email >/dev/null 2>&1 && return 0
-  die "Git kennt dich noch nicht - repo braucht das. Einmalig setzen:
-         git config --global user.name \"DEIN-NAME\"
-         git config --global user.email \"DEIN-NAME@users.noreply.github.com\"
-       Die Noreply-Adresse von GitHub haelt deine echte Mail aus den Commits heraus."
+  die "Git does not know you yet - repo needs that. Set it once:
+         git config --global user.name \"YOUR-NAME\"
+         git config --global user.email \"YOUR-NAME@users.noreply.github.com\"
+       GitHub's noreply address keeps your real e-mail out of the commits."
 }
 
 cmd_sync() {
-  need repo "siehe ./noxis.sh check"
-  need git-lfs "git-lfs installieren"
-  git_identitaet
-  command -v git-lfs >/dev/null 2>&1 || die "git-lfs fehlt – sonst fehlen nach dem Sync u.a. die WebView-APKs.
-       Gentoo: sudo emerge --ask dev-vcs/git-lfs"
-  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$(dirname "$SRC")" 150 "den Quellcode"
+  need repo "see ./noxis.sh check"
+  need git-lfs "install git-lfs – otherwise the WebView APKs and more are missing after the sync"
+  git_identity
+  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$(dirname "$SRC")" 150 "the source code"
   mkdir -p "$SRC" && cd "$SRC"
   if [ ! -d .repo ]; then
-    c "LineageOS $BRANCH initialisieren"
+    c "Initialising LineageOS $BRANCH"
     repo init -u https://github.com/LineageOS/android.git -b "$BRANCH" --git-lfs --no-clone-bundle --depth=1
   fi
   mkdir -p .repo/local_manifests
   cp "$NOXIS/manifest/noxis.xml" .repo/local_manifests/noxis.xml
-  c "Quellcode synchronisieren (beim ersten Mal mehrere Stunden)"
-  # --depth gehoert zu 'repo init', nicht zu 'repo sync' - dort ist es keine
-  # gueltige Option und bricht sofort ab. Die flache Tiefe steht seit dem
-  # init oben in der Manifest-Konfiguration und gilt fuer jeden sync.
+  c "Syncing the source (several hours the first time)"
+  # --depth belongs to 'repo init', not 'repo sync' - there it is not a valid
+  # option and fails immediately. The shallow depth is stored in the
+  # manifest config since the init above and applies to every sync.
   #
-  # Gleichzeitige Abrufe nach RAM begrenzen: jeder ist ein eigener
-  # git-Prozess, und auf einem Rechner mit wenig Speicher holt der
-  # OOM-Killer sonst mitten im Abruf welche weg.
+  # Limit parallel fetches by RAM: each one is its own git process, and on a
+  # machine with little memory the OOM killer takes some out mid-fetch.
   local jobs
   jobs=$(awk '/MemTotal/ {j=int($2/1024/1024/2); print (j<2 ? 2 : (j>8 ? 8 : j))}' /proc/meminfo)
   [ "$jobs" -gt "$(nproc)" ] && jobs=$(nproc)
-  c "  $jobs gleichzeitige Abrufe"
+  c "  $jobs parallel fetches"
   repo sync -c -j"$jobs" --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune \
     || repo sync -c -j2 --force-sync --no-clone-bundle --no-tags
-  lfs_holen
+  lfs_fetch
   cmd_vendor
 }
 
 cmd_vendor() {
-  c "vendor/noxis in den Quellbaum kopieren"
+  c "Copying vendor/noxis into the source tree"
   mkdir -p "$SRC/vendor/noxis"
   find "$SRC/vendor/noxis" -mindepth 1 -maxdepth 1 ! -name prebuilt -exec rm -rf {} +
   cp -a "$NOXIS/vendor/noxis/." "$SRC/vendor/noxis/"
-  c "Noxis-Patches anwenden"
+  c "Applying the Noxis patches"
   python3 "$NOXIS/tools/noxis_patch.py" "$SRC"
 }
 
 # ------------------------------------------------------------ apps
-gh_latest_asset() {  # <owner/repo> <regex>  →  Download-URL
+gh_latest_asset() {  # <owner/repo> <regex>  →  download URL
   local repo="$1" re="$2" tag
   tag=$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest" | sed 's,.*/tag/,,')
   [ -n "$tag" ] || return 1
@@ -267,12 +274,12 @@ gh_latest_asset() {  # <owner/repo> <regex>  →  Download-URL
     | grep -oE "/$repo/releases/download/[^\"]+" | grep -E "$re" | head -1 | sed 's,^,https://github.com,'
 }
 
-gh_tag_asset() {  # <owner/repo> <tag> <regex>  →  Download-URL eines festen Releases
+gh_tag_asset() {  # <owner/repo> <tag> <regex>  →  download URL of a fixed release
   curl -fsSL "https://github.com/$1/releases/expanded_assets/$2" \
     | grep -oE "/$1/releases/download/[^\"]+" | grep -E "$3" | head -1 | sed 's,^,https://github.com,'
 }
 
-tor_url() {  # neueste stabile Tor-Browser-Version für arm64
+tor_url() {  # newest stable Tor Browser for arm64
   local ver
   ver=$(curl -fsSL --max-time 60 https://dist.torproject.org/torbrowser/ | grep -oE 'href="[0-9]+\.[0-9]+(\.[0-9]+)?/"' \
         | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | sort -V | tail -1) || true
@@ -280,18 +287,17 @@ tor_url() {  # neueste stabile Tor-Browser-Version für arm64
   return 0
 }
 
-install_fennec() {  # Firefox ohne Google/Telemetrie (Fennec F-Droid), arm64-Variante
+install_fennec() {  # Firefox without Google/telemetry (Fennec F-Droid), arm64 build
   local api ver codes code dir="$NOXIS/vendor/noxis/prebuilt/Fennec"
   api=$(curl -fsSL --max-time 60 https://f-droid.org/api/v1/packages/org.mozilla.fennec_fdroid) \
-    || { warn "Fennec: F-Droid nicht erreichbar – wird weggelassen"; return 0; }
-  # Ungeschuetzt wuerde eine Formataenderung bei F-Droid wegen 'set -e' den
-  # ganzen Lauf abbrechen. Eine fehlende App soll aber nur fehlen, wie bei
-  # install_apk auch.
+    || { warn "Fennec: F-Droid not reachable – skipped"; return 0; }
+  # Unguarded, a format change at F-Droid would abort the whole run because
+  # of 'set -e'. A missing app should just be missing, like in install_apk.
   ver=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); s=d["suggestedVersionCode"]; print(next(p["versionName"] for p in d["packages"] if p["versionCode"]==s))' "$api" 2>/dev/null) \
-    || { warn "Fennec: F-Droid-Antwort unerwartet – wird weggelassen"; return 0; }
-  [ -n "$ver" ] || { warn "Fennec: keine Version gefunden – wird weggelassen"; return 0; }
+    || { warn "Fennec: unexpected F-Droid answer – skipped"; return 0; }
+  [ -n "$ver" ] || { warn "Fennec: no version found – skipped"; return 0; }
   codes=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(" ".join(str(p["versionCode"]) for p in d["packages"] if p["versionName"]==sys.argv[2]))' "$api" "$ver" 2>/dev/null) \
-    || { warn "Fennec: keine Pakete zu $ver – wird weggelassen"; return 0; }
+    || { warn "Fennec: no packages for $ver – skipped"; return 0; }
   mkdir -p "$dir"
   for code in $codes; do
     curl -fsSL --max-time 900 -o "$dir/Fennec.apk.part" "https://f-droid.org/repo/org.mozilla.fennec_fdroid_$code.apk" || continue
@@ -303,7 +309,7 @@ android_app_import {
     name: "Fennec",
     apk: "Fennec.apk",
     presigned: true,
-    // Signatur v2/v3 bleibt nur heil, wenn Soong die APK nicht anfasst
+    // the v2/v3 signature only survives if Soong does not touch the APK
     preprocessed: true,
     product_specific: true,
     dex_preopt: {
@@ -315,18 +321,18 @@ EOF
     fi
   done
   rm -f "$dir/Fennec.apk.part"; rmdir "$dir" 2>/dev/null || true
-  warn "Fennec: keine arm64-APK gefunden – Browser wird weggelassen"
+  warn "Fennec: no arm64 APK found – browser skipped"
 }
 
-install_apk() {  # <Name> <url> <privileged:true|false>
+install_apk() {  # <name> <url> <privileged:true|false>
   local name="$1" url="$2" priv="$3" dir
   dir="$NOXIS/vendor/noxis/prebuilt/$name"
-  [ -n "$url" ] || { warn "$name: keine Download-Adresse gefunden – wird weggelassen"; return 0; }
+  [ -n "$url" ] || { warn "$name: no download address found – skipped"; return 0; }
   mkdir -p "$dir"
   c "$name ← $url"
-  # --max-time, damit ein haengender Server den Lauf nicht endlos blockiert.
+  # --max-time so a hanging server does not block the run forever.
   if ! curl -fL --progress-bar --connect-timeout 20 --max-time 1800 -o "$dir/$name.apk.part" "$url"; then
-    warn "$name: Download fehlgeschlagen – wird weggelassen"
+    warn "$name: download failed – skipped"
     rm -f "$dir/$name.apk.part"; rmdir "$dir" 2>/dev/null || true
     return 0
   fi
@@ -336,7 +342,7 @@ android_app_import {
     name: "$name",
     apk: "$name.apk",
     presigned: true,
-    // Signatur v2/v3 bleibt nur heil, wenn Soong die APK nicht anfasst
+    // the v2/v3 signature only survives if Soong does not touch the APK
     preprocessed: true,
     product_specific: true,
     privileged: $priv,
@@ -378,7 +384,7 @@ install_own_apps() {
       echo "android_app_import {"
       echo "    name: \"$name\","
       echo "    apk: \"$name.apk\","
-      echo "    // Testschluessel beim Bauen, beim Signieren (noxis.sh sign) durch den Noxis-Schluessel ersetzt"
+      echo "    // test key while building, replaced by the Noxis key when signing (noxis.sh sign)"
       echo "    default_dev_cert: true,"
       echo "    product_specific: true,"
       [ -n "$over" ] && echo "    overrides: [\"$over\"],"
@@ -393,16 +399,16 @@ install_own_apps() {
 }
 
 cmd_apps() {
-  need curl "curl installieren"
+  need curl "install curl"
   install_own_apps
   install_apk GrapheneCamera    "$(gh_latest_asset GrapheneOS/Camera '\.apk$' || true)" false
   install_apk GraphenePdfViewer "$(gh_latest_asset GrapheneOS/PdfViewer '\.apk$' || true)" false
-  # Standard-Browser: Cromite (gehärtetes Chromium – Website-Isolierung, starke Renderer-Sandbox)
+  # Default browser: Cromite (hardened Chromium – site isolation, strong renderer sandbox)
   install_apk Cromite           "$(gh_latest_asset uazo/cromite 'arm64_ChromePublic\.apk$' || true)" false
   install_fennec
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false
   install_apk TorBrowser        "$(tor_url)" false
-  # Manager muss zur KernelSU-Version im Kernel passen (vendored v3.3.1) und offiziell signiert sein
+  # The manager has to match the KernelSU version in the kernel (vendored v3.3.1) and be officially signed
   install_apk KernelSU          "$(gh_tag_asset tiann/KernelSU "$KSU_TAG" 'KernelSU.*\.apk$' || true)" false
   [ -d "$SRC/vendor" ] && cmd_vendor
   return 0
@@ -411,135 +417,131 @@ cmd_apps() {
 # ------------------------------------------------------------ blobs
 cmd_blobs() {
   local ota="${1:-}"
-  [ -f "$ota" ] || [ -d "$ota" ] || die "Pfad zur Nothing-OS-OTA (Vollversion .zip) oder einem Dump angeben"
-  # Die Partitionen des Nothing-OS sind EROFS. Ohne fsck.erofs entpackt
-  # extract-files.py gar nichts, meldet das aber nur als Warnung und laeuft
-  # weiter - am Ende stehen dann tausend Zeilen "file not found", und die
-  # eigentliche Ursache steht ganz oben im Protokoll.
+  [ -f "$ota" ] || [ -d "$ota" ] || die "Give the path to the Nothing OS OTA (full .zip) or to a dump"
+  # The Nothing OS partitions are EROFS. Without fsck.erofs extract-files.py
+  # extracts nothing at all but only warns and continues - you end up with a
+  # thousand "file not found" lines and the real cause far up in the log.
   command -v fsck.erofs >/dev/null 2>&1 \
-    || die "fsck.erofs fehlt - ohne das bleiben alle Partitionen zu.
+    || die "fsck.erofs is missing - without it no partition can be opened.
        Gentoo:  sudo emerge -av sys-fs/erofs-utils
        Ubuntu:  sudo apt install erofs-utils"
   ota="$(cd "$(dirname "$ota")" && pwd)/$(basename "$ota")"
   local want
   want=$(sed -n 's/^## .*are from the \(.*\) release.*/\1/p' "$SRC/device/nothing/$DEVICE/proprietary-files.txt" | head -1)
-  [ -n "$want" ] && c "Gerätebaum erwartet Nothing OS: $want"
-  # Stand des Abzugs mit dem erwarteten vergleichen, bevor irgendetwas
-  # passiert. Ein anderer Stand fuehrt nicht zu einem Fehler, sondern zu
-  # vielen: abweichende Pruefsummen, fehlende und neue Abhaengigkeiten, und
-  # jeder davon zeigt sich erst beim Bau. Das hat einmal eine Stunde
-  # gekostet - also lieber hier anhalten.
-  if [ -n "$want" ] && [ -d "$ota" ] && [ "${NOXIS_ANDERER_STAND:-0}" != 1 ]; then
-    local prop hat=""
+  [ -n "$want" ] && c "Device tree expects Nothing OS: $want"
+  # Compare the dump's version with the expected one before anything
+  # happens. A different version does not cause one error but many:
+  # different checksums, missing and new dependencies, and each only shows
+  # up during the build. That once cost an hour - so stop here.
+  if [ -n "$want" ] && [ -d "$ota" ] && [ "$NOXIS_OTHER_FIRMWARE" != 1 ]; then
+    local prop have=""
     for prop in "$ota/system/build.prop" "$ota/system/system/build.prop" \
                 "$ota/vendor/build.prop" "$ota/product/etc/build.prop"; do
       [ -f "$prop" ] || continue
-      hat=$(grep -m1 -E '^ro\.(build\.display\.id|system\.build\.version\.incremental|vendor\.build\.version\.incremental)=' "$prop" | cut -d= -f2-)
-      [ -n "$hat" ] && break
+      have=$(grep -m1 -E '^ro\.(build\.display\.id|system\.build\.version\.incremental|vendor\.build\.version\.incremental)=' "$prop" | cut -d= -f2-)
+      [ -n "$have" ] && break
     done
-    if [ -n "$hat" ] && ! printf '%s' "$hat" | grep -qF "$want"; then
-      die "Der Abzug ist ein anderer Nothing-OS-Stand:
-         Abzug:     $hat
-         erwartet:  $want
-       Damit passen Pruefsummen und Abhaengigkeiten nicht, und der Bau
-       scheitert an immer neuen Stellen. Den passenden Stand gibt es hier
+    if [ -n "$have" ] && ! printf '%s' "$have" | grep -qF "$want"; then
+      die "The dump is a different Nothing OS version:
+         dump:      $have
+         expected:  $want
+       Checksums and dependencies will not match and the build fails at
+       ever new places. The matching version is here
        (Phone (3a) -> $want -> 'OTA Images'):
-         https://spike0en.github.io/nothing_archive/docs/firmware
-       Bewusst trotzdem weitermachen:  NOXIS_ANDERER_STAND=1 ./noxis.sh blobs ..."
-    elif [ -n "$hat" ]; then
-      c "Abzug passt: $hat"
+         https://nothingarchive.tech/docs/firmware
+       Continue anyway on purpose:  NOXIS_OTHER_FIRMWARE=1 ./noxis.sh blobs ..."
+    elif [ -n "$have" ]; then
+      c "Dump matches: $have"
     fi
   fi
   cd "$SRC/device/nothing/$DEVICE"
-  # Der Geraetebaum schreibt Dateinamen und Pruefsummen einer bestimmten
-  # Nothing-OS-Fassung fest. Ist der eigene Abzug eine andere, passt beides
-  # nicht: Pruefsummen weichen ab, und regionsfremde Dateien (Verizon in
-  # US-Firmware) fehlen ganz. Mit --neu laesst extract-files.py die Liste
-  # aus dem vorhandenen Abzug neu schreiben.
+  # The device tree hard-codes file names and checksums of one specific
+  # Nothing OS version. If your dump is a different one, both do not match:
+  # checksums differ, and region-specific files (Verizon in US firmware) are
+  # missing completely. With --regen extract-files.py rewrites the list from
+  # the dump you have.
   local regen=""
-  case "${2:-}${NOXIS_REGEN:+--neu}" in *--neu*) regen="--regenerate" ;; esac
+  case "${2:-}${NOXIS_REGEN:+--regen}" in *--regen*|*--neu*) regen="--regenerate" ;; esac
   if [ -n "$regen" ]; then
-    c "Herstellerdateien extrahieren, Dateiliste neu schreiben (anderer Nothing-OS-Stand)"
-    warn "proprietary-files.txt wird dabei neu geschrieben. Dabei koennen
-       Umbenennungs-Eintraege (quelle:ziel) verloren gehen, und der Bau
-       meldet dann 'depends on undefined module'. Zuruecksetzen:
+    c "Extracting vendor files, rewriting the file list (different Nothing OS version)"
+    warn "proprietary-files.txt gets rewritten. Rename entries (source:target)
+       can get lost, and the build then reports 'depends on undefined
+       module'. Reset it with:
          cd $SRC/device/nothing/$DEVICE && git checkout proprietary-files.txt
-       Fuer fehlende Verizon/Miracast-Dateien ist --neu nicht noetig, die
-       nimmt tools/blobs-weglassen.txt ohnehin heraus."
+       Missing Verizon/Miracast files do not need --regen, tools/blobs-skip.txt
+       removes them anyway."
   else
-    c "Herstellerdateien extrahieren (WLAN, Mobilfunk/IMS, NFC, eSIM, Kamera, Firmware)"
+    c "Extracting vendor files (Wi-Fi, mobile/IMS, NFC, eSIM, camera, firmware)"
   fi
-  # Noxis-Patches zuerst: einige betreffen die Dateiliste und extract-files.py
-  # selbst (etwa die Kamera-Bibliothek postproc@1.0-nt). Sie sind wiederholbar
-  # und greifen damit auch nach einem 'git checkout' der Liste.
-  c "Noxis-Patches auf den Geraetebaum anwenden"
-  python3 "$NOXIS/tools/noxis_patch.py" "$SRC" || die "Noxis-Patches fehlgeschlagen"
-  # Was Noxis bewusst weglaesst, vor jeder Extraktion aus der Liste nehmen -
-  # auch nach einem 'repo sync', der proprietary-files.txt zuruecksetzt.
-  c "Weggelassene Herstellerdateien aus der Liste nehmen"
-  { grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-weglassen.txt" || true; } \
+  # Noxis patches first: some of them touch the file list and
+  # extract-files.py itself (e.g. the camera library postproc@1.0-nt). They
+  # are repeatable and therefore also apply after a 'git checkout' of the list.
+  c "Applying the Noxis patches to the device tree"
+  python3 "$NOXIS/tools/noxis_patch.py" "$SRC" || die "Noxis patches failed"
+  # What Noxis leaves out on purpose comes off the list before every
+  # extraction - also after a 'repo sync' resets proprietary-files.txt.
+  c "Removing skipped vendor files from the list"
+  { grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-skip.txt" || true; } \
     | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$SRC/device/nothing/$DEVICE/proprietary-files.txt" \
-    || die "Liste der weggelassenen Dateien liess sich nicht anwenden"
-  # Umgekehrt: was neuere Nothing-OS-Staende zusaetzlich brauchen. Nur
-  # nachtragen, wenn die Datei im entpackten Abzug liegt - sonst wuerde die
-  # Extraktion an einem Eintrag ohne Datei scheitern.
-  local liste_pf="$SRC/device/nothing/$DEVICE/proprietary-files.txt" dazu
-  if [ -d "$ota" ] && [ -f "$NOXIS/tools/blobs-dazu.txt" ]; then
-    # '|| true': ohne Eintraege liefert grep 1, und mit pipefail wuerde das
-    # Skript hier stumm enden - genau so ist die Extraktion einmal ausgefallen.
-    { grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-dazu.txt" || true; } | while read -r dazu; do
-      grep -qF "$dazu" "$liste_pf" && continue
-      if [ -e "$ota/$dazu" ]; then
-        printf '%s\n' "$dazu" >> "$liste_pf"
-        c "  nachgetragen: $dazu"
+    || die "The list of skipped files could not be applied"
+  # The other way round: what newer Nothing OS versions need in addition.
+  # Only added if the file exists in the extracted dump - otherwise the
+  # extraction would fail on an entry without a file.
+  local list_pf="$SRC/device/nothing/$DEVICE/proprietary-files.txt" extra
+  if [ -d "$ota" ] && [ -f "$NOXIS/tools/blobs-add.txt" ]; then
+    # '|| true': without entries grep returns 1, and with pipefail the
+    # script would end here silently - exactly how the extraction once failed.
+    { grep -v '^[[:space:]]*\(#\|$\)' "$NOXIS/tools/blobs-add.txt" || true; } | while read -r extra; do
+      grep -qF "$extra" "$list_pf" && continue
+      if [ -e "$ota/$extra" ]; then
+        printf '%s\n' "$extra" >> "$list_pf"
+        c "  added: $extra"
       else
-        c "  nicht im Abzug, bleibt weg: $dazu"
+        c "  not in the dump, stays out: $extra"
       fi
     done
   fi
   if [ -z "$regen" ]; then
     ./extract-files.py "$ota"
   else
-    # extract-files.py sagt selbst, welche Dateien es nicht findet
-    # ("<pfad>: file not found") und bricht dann ab. Genau diese Eintraege
-    # nehmen wir aus der Liste und versuchen es erneut. Das haengt damit an
-    # dem, was das Werkzeug feststellt, statt an einer Annahme darueber, wie
-    # der Abzug aufgebaut ist.
-    # Auf den Rueckgabewert ist kein Verlass: extract-files.py endet mit 0,
-    # auch wenn es "Some files failed to process, exiting" schreibt. Also
-    # entscheidet, was in der Ausgabe steht.
-    local log liste versuch=0
-    log=$(mktemp); liste="$SRC/device/nothing/$DEVICE/proprietary-files.txt"
-    while [ "$versuch" -le 3 ]; do
+    # extract-files.py itself says which files it cannot find
+    # ("<path>: file not found") and then stops. Exactly those entries are
+    # taken off the list and it tries again. That way it depends on what the
+    # tool finds, not on an assumption about how the dump is laid out.
+    # The exit code is no help: extract-files.py ends with 0 even when it
+    # writes "Some files failed to process, exiting". So the output decides.
+    local log list try=0 missing
+    log=$(mktemp); list="$SRC/device/nothing/$DEVICE/proprietary-files.txt"
+    while [ "$try" -le 3 ]; do
       ./extract-files.py --regenerate "$ota" 2>&1 | tee "$log" || true
-      # Farbcodes und Wagenruecklauf vorher abziehen: extract-files.py faerbt
-      # Fehlerzeilen ein, und dann passt ein Muster mit '^' und '$' nicht.
-      fehlend=$(sed 's/\x1b\[[0-9;]*[A-Za-z]//g; s/\r$//' "$log" \
+      # Strip colour codes and carriage returns first: extract-files.py
+      # colours error lines, and then a pattern with '^' and '$' fails.
+      missing=$(sed 's/\x1b\[[0-9;]*[A-Za-z]//g; s/\r$//' "$log" \
                 | sed -n 's/^[[:space:]]*\(.*[^[:space:]]\):[[:space:]]*file not found[[:space:]]*$/\1/p' \
                 | sort -u)
-      if [ -z "$fehlend" ]; then
-        # Abgebrochen, aber nichts erkannt: zeigen, wie die Zeilen wirklich
-        # aussehen, statt still aufzugeben.
+      if [ -z "$missing" ]; then
+        # Stopped, but nothing recognised: show what the lines really look
+        # like instead of giving up silently.
         if grep -q "failed to process" "$log"; then
-          warn "Extraktion abgebrochen, aber keine 'file not found'-Zeile erkannt. So sehen sie aus:"
+          warn "Extraction stopped, but no 'file not found' line was recognised. They look like this:"
           grep -a "file not found" "$log" | head -3 | cat -v | sed 's/^/       /'
         fi
         break
       fi
-      versuch=$((versuch + 1))
-      c "Eintraege ohne Datei im Abzug entfernen (Durchgang $versuch)"
-      if ! printf '%s\n' "$fehlend" | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$liste"; then
-        rm -f "$log"; die "Aufraeumen fehlgeschlagen"
+      try=$((try + 1))
+      c "Removing entries without a file in the dump (pass $try)"
+      if ! printf '%s\n' "$missing" | python3 "$NOXIS/tools/noxis_blobs_clean.py" "$list"; then
+        rm -f "$log"; die "Clean-up failed"
       fi
     done
     rm -f "$log"
   fi
-  [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Extraktion unvollständig"
+  [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Extraction incomplete"
   c "OK: vendor/nothing/$DEVICE"
 }
 
 # ------------------------------------------------------------ keys
-make_key4096() {  # <pfad-ohne-endung> <subject>
+make_key4096() {  # <path-without-extension> <subject>
   local tmp
   tmp=$(mktemp -d)
   cp "$SRC/development/tools/make_key" "$tmp/make_key"
@@ -549,21 +551,21 @@ make_key4096() {  # <pfad-ohne-endung> <subject>
 }
 
 cmd_keys() {
-  [ -x "$SRC/development/tools/make_key" ] || die "Erst ./noxis.sh sync"
+  [ -x "$SRC/development/tools/make_key" ] || die "Run ./noxis.sh sync first"
   mkdir -p "$KEYS" && chmod 700 "$KEYS"
   for cert in releasekey platform shared media networkstack sdk_sandbox bluetooth nfc testkey; do
     [ -f "$KEYS/$cert.pk8" ] && continue
-    c "Schlüssel: $cert"
+    c "Key: $cert"
     printf '\n' | "$SRC/development/tools/make_key" "$KEYS/$cert" "$SUBJECT" >/dev/null 2>&1 || true
-    [ -f "$KEYS/$cert.pk8" ] || die "make_key $cert fehlgeschlagen"
+    [ -f "$KEYS/$cert.pk8" ] || die "make_key $cert failed"
   done
   if [ ! -f "$KEYS/avb.pem" ]; then
-    c "Verified-Boot-Schlüssel (RSA-4096)"
+    c "Verified boot key (RSA-4096)"
     openssl genrsa -out "$KEYS/avb.pem" 4096 2>/dev/null
   fi
   chmod 600 "$KEYS"/*
-  c "Schlüssel liegen in $KEYS"
-  warn "SICHERN! Ohne diese Schlüssel lassen sich keine Updates mehr über Noxis-OTA einspielen (nur Neuinstallation mit Datenverlust)."
+  c "Keys are in $KEYS"
+  warn "BACK THEM UP! Without these keys no Noxis OTA update can be installed any more (only a reinstall with data loss)."
 }
 
 apex_keys() {  # <target_files.zip>
@@ -577,31 +579,31 @@ apex_keys() {  # <target_files.zip>
 
 # ------------------------------------------------------------ build
 cmd_build() {
-  [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Erst ./noxis.sh blobs <ota.zip>"
-  # out/ waechst beim Bauen auf ueber 100 GB.
-  # Was out/ schon belegt, ist vom Bedarf abzuziehen - sonst scheitert jeder
-  # Weiterbau nach einem Abbruch an der Platzpruefung.
-  local schon=0 noetig
-  [ -d "$SRC/out" ] && schon=$(du -sBG "$SRC/out" 2>/dev/null | cut -f1 | tr -dc 0-9 || echo 0)
-  noetig=$(( 130 - ${schon:-0} )); [ "$noetig" -lt 15 ] && noetig=15
-  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" "$noetig" "out/ (noch zu bauen, ${schon:-0} GB schon da)"
+  [ -f "$SRC/vendor/nothing/$DEVICE/$DEVICE-vendor.mk" ] || die "Run ./noxis.sh blobs <ota.zip> first"
+  # out/ grows to more than 100 GB while building.
+  # What out/ already uses is subtracted from the need - otherwise every
+  # resumed build after an abort would fail at the space check.
+  local have=0 needed
+  [ -d "$SRC/out" ] && have=$(du -sBG "$SRC/out" 2>/dev/null | cut -f1 | tr -dc 0-9 || echo 0)
+  needed=$(( 130 - ${have:-0} )); [ "$needed" -lt 15 ] && needed=15
+  [ "${NOXIS_SKIP_SPACE:-0}" = 1 ] || need_space "$SRC" "$needed" "out/ (still to build, ${have:-0} GB already there)"
   cmd_vendor
-  c "Privilegierte Berechtigungen pruefen"
+  c "Checking privileged permissions"
   python3 "$NOXIS/tools/noxis_privapp_check.py" "$SRC" "$SRC/vendor/noxis" \
-    || die "Berechtigung fehlt in vendor/noxis/permissions – sonst Bootschleife (siehe oben)"
+    || die "A permission is missing in vendor/noxis/permissions – that would be a boot loop (see above)"
   if [ "$NOXIS_DEBUG" = 1 ]; then
     echo "NOXIS_DEBUG := 1" > "$SRC/vendor/noxis/config/noxis_debug.mk"
-    warn "DEBUG-BUILD ($VARIANT): ADB offen ohne Freigabe – nur zur Fehlersuche!"
+    warn "DEBUG BUILD ($VARIANT): ADB open without approval – for debugging only!"
   else
     rm -f "$SRC/vendor/noxis/config/noxis_debug.mk"
   fi
-  apks_pruefen
-  lfs_pruefen
-  zram_an
+  apks_check
+  lfs_check
+  zram_on
   envsetup
-  # ccache ist aus: beim ersten Bau ist der Cache leer und bringt nichts, und
-  # in den Bau-Sandboxen von Android 17 scheitert er mit "ccache: error: Not
-  # a directory". Wer ihn fuer spaetere Neubauten will: NOXIS_CCACHE=1.
+  # ccache is off: on the first build the cache is empty and does not help,
+  # and inside the Android 17 build sandboxes it fails with "ccache: error:
+  # Not a directory". If you want it for later rebuilds: NOXIS_CCACHE=1.
   if [ "${NOXIS_CCACHE:-0}" = 1 ] && command -v ccache >/dev/null; then
     mkdir -p "$HOME/.ccache-noxis"
     export USE_CCACHE=1 CCACHE_EXEC="$(command -v ccache)" CCACHE_DIR="$HOME/.ccache-noxis"
@@ -609,69 +611,68 @@ cmd_build() {
   else
     unset USE_CCACHE CCACHE_EXEC
   fi
-  # Ohne Begrenzung startet mka so viele Übersetzer, wie Kerne da sind. Jeder
-  # davon braucht Speicher; auf einem Rechner mit wenig RAM endet das im
-  # OOM-Killer, meist nach Stunden. Darum: ein Job je 4 GB.
+  # Without a limit mka starts as many compilers as there are cores. Each
+  # needs memory; on a machine with little RAM that ends in the OOM killer,
+  # usually after hours. So: one job per 4 GB.
   #
-  # Swap zaehlt dabei mit, aber nur zur Haelfte. Nicht jeder Uebersetzer
-  # braucht seinen Speicher gleichzeitig, also darf etwas davon ausgelagert
-  # sein - voll gerechnet wuerde der Rechner aber nur noch auslagern statt
-  # zu uebersetzen. Mit 14 GB RAM und 24 GB Swap ergibt das 6 statt 3 Jobs
-  # und damit grob die halbe Bauzeit.
+  # Swap counts, but only half. Not every compiler needs its memory at the
+  # same time, so some may be swapped out - counted fully the machine would
+  # only swap instead of compile. With 14 GB RAM and 24 GB swap that gives
+  # 6 instead of 3 jobs and roughly half the build time.
   local ram swap jobs
   ram=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
   swap=$(awk '/SwapTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
   jobs="${NOXIS_JOBS:-$(( (ram + swap / 2) / 4 ))}"
   [ "$jobs" -lt 2 ] && jobs=2
   [ "$jobs" -gt "$(nproc)" ] && jobs=$(nproc)
-  c "Baue Noxis OS ($DEVICE-$VARIANT) mit $jobs Jobs (${ram} GB RAM + ${swap} GB Swap) – das dauert"
+  c "Building Noxis OS ($DEVICE-$VARIANT) with $jobs jobs (${ram} GB RAM + ${swap} GB swap) – this takes a while"
   if [ "$ram" -lt 24 ]; then
-    warn "Wenig RAM: rechne mit vielen Stunden.
-       Haengt der Rechner nur noch am Auslagern (Platte dauerlaeuft, nichts
-       geht voran), mit weniger Jobs neu starten: NOXIS_JOBS=$(( jobs - 2 ))
-       Mehr Jobs gehen auch: NOXIS_JOBS=n"
+    warn "Little RAM: expect many hours.
+       If the PC only swaps (disk busy all the time, no progress), restart
+       with fewer jobs: NOXIS_JOBS=$(( jobs - 2 ))
+       More jobs work too: NOXIS_JOBS=n"
   fi
   mka -j"$jobs" target-files-package otatools \
-    || die "Build fehlgeschlagen – im Log oben nach der ersten Zeile mit 'error:' suchen"
-  c "Build fertig."
-  cmd_opsec || die "OPSEC-Prüfung fehlgeschlagen – siehe oben"
-  c "Weiter: ./noxis.sh sign"
+    || die "Build failed – look for the first line with 'error:' in the log above"
+  c "Build done."
+  cmd_opsec || die "OPSEC check failed – see above"
+  c "Next: ./noxis.sh sign"
 }
 
 # ------------------------------------------------------------ opsec
-# Prüft das gebaute Image gegen die Noxis-Regeln. Die Gerätebäume kommen von
-# fremden Projekten und ändern sich; was dort hereinkommt, soll hier auffallen
-# und nicht erst auf dem Handy.
+# Checks the built image against the Noxis rules. The device trees come from
+# other projects and change; whatever slips in should show up here and not
+# only on the phone.
 cmd_opsec() {
   local prod="$SRC/out/target/product/$DEVICE"
-  [ -d "$prod" ] || die "Nichts gebaut – erst ./noxis.sh build"
-  NOXIS_NACH="$NACH" "$NOXIS/tools/opsec-verify.sh" "$prod"
+  [ -d "$prod" ] || die "Nothing built – run ./noxis.sh build first"
+  NOXIS_POSTINSTALL="$POST" "$NOXIS/tools/opsec-verify.sh" "$prod"
 }
 
 # ------------------------------------------------------------ sign
 cmd_sign() {
-  [ -f "$KEYS/releasekey.pk8" ] || die "Erst ./noxis.sh keys"
+  [ -f "$KEYS/releasekey.pk8" ] || die "Run ./noxis.sh keys first"
   envsetup
   local tf
   local pout="${ANDROID_PRODUCT_OUT:-$SRC/out/target/product/$DEVICE}"
   tf=$(ls -t "$pout"/obj/PACKAGING/target_files_intermediates/*-target_files*.zip 2>/dev/null | head -1 || true)
-  [ -f "$tf" ] || die "Kein target_files.zip – erst ./noxis.sh build"
-  c "APEX-Schlüssel erzeugen"
+  [ -f "$tf" ] || die "No target_files.zip – run ./noxis.sh build first"
+  c "Creating APEX keys"
   apex_keys "$tf"
   mkdir -p "$REL"
   local stamp; stamp=$(date -u +%Y%m%d)
   local name="Noxis-1.0-$stamp-$DEVICE"
   local -a args
   mapfile -t args < <(python3 "$NOXIS/tools/noxis_sign_args.py" "$tf" "$KEYS" args)
-  c "Signiere (Apps, APEXe, Verified Boot)"
+  c "Signing (apps, APEXes, verified boot)"
   sign_target_files_apks "${args[@]}" "$tf" "$REL/$name-target_files.zip"
-  c "OTA-Paket"
+  c "OTA package"
   ota_from_target_files -k "$KEYS/releasekey" "$REL/$name-target_files.zip" "$REL/$name-ota.zip"
-  c "Fastboot-Images"
+  c "Fastboot images"
   img_from_target_files "$REL/$name-target_files.zip" "$REL/$name-img.zip"
   ( cd "$REL" && sha256sum "$name-ota.zip" "$name-img.zip" > "$name.sha256" )
   write_ota_json "$REL/$name-ota.zip" "noxis-$stamp" > "$REL/$DEVICE.json"
-  c "Fertig in $REL:"
+  c "Done in $REL:"
   ls -1 "$REL" | sed 's,^,  ,'
   cmd_cleanup
 }
@@ -707,15 +708,15 @@ EOF
 }
 
 cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (read by the phone's Updater)
-  need gh "GitHub CLI installieren und 'gh auth login' ausführen"
-  need unzip "unzip installieren"
+  need gh "install the GitHub CLI and run 'gh auth login'"
+  need unzip "install unzip"
   local ota desk tag json
   desk="$(desktop_dir)"
   ota=$(ls -t "$desk"/Noxis-*-"$DEVICE"-ota.zip "$REL"/Noxis-*-"$DEVICE"-ota.zip 2>/dev/null | head -n1 || true)
-  [ -f "$ota" ] || die "Keine signierte OTA gefunden – erst ./noxis.sh sign"
-  [ "$(stat -c %s "$ota")" -lt 2147483648 ] || die "OTA größer als 2 GiB – GitHub-Releases erlauben max. 2 GiB pro Datei"
-  unzip -tq "$ota" >/dev/null || die "OTA-Zip beschädigt: $ota"
-  unzip -l "$ota" | grep -q "META-INF/com/android/otacert" || die "OTA ohne Signaturzertifikat – mit ./noxis.sh sign erzeugen"
+  [ -f "$ota" ] || die "No signed OTA found – run ./noxis.sh sign first"
+  [ "$(stat -c %s "$ota")" -lt 2147483648 ] || die "OTA larger than 2 GiB – GitHub releases allow at most 2 GiB per file"
+  unzip -tq "$ota" >/dev/null || die "OTA zip damaged: $ota"
+  unzip -l "$ota" | grep -q "META-INF/com/android/otacert" || die "OTA without signing certificate – create it with ./noxis.sh sign"
   tag="noxis-$(basename "$ota" | sed -n 's/^Noxis-[0-9.]*-\([0-9]\{8\}\)-.*/\1/p')"
   [ "$tag" != noxis- ] || tag="noxis-$(date -u +%Y%m%d)"
   if gh release view "$tag" -R "$NOXIS_GH_REPO" >/dev/null 2>&1; then tag="$tag-$(date -u +%H%M)"; fi
@@ -730,7 +731,7 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
   git -C "$NOXIS" add "ota/$DEVICE.json"
   git -C "$NOXIS" commit -qm "OTA: $(basename "$ota")"
   git -C "$NOXIS" push -q origin HEAD
-  c "Veröffentlicht. Handy: Einstellungen → System → Updater → Nach Updates suchen"
+  c "Published. Phone: Settings → System → Updater → Check for updates"
 }
 
 # ------------------------------------------------------------ cleanup
@@ -744,7 +745,7 @@ desktop_dir() {
 cmd_cleanup() {
   local ota img desk
   ota=$(latest ota.zip); img=$(latest img.zip)
-  [ -f "$ota" ] && [ -f "$img" ] || die "Keine fertige ROM in $REL – out/ wird NICHT gelöscht"
+  [ -f "$ota" ] && [ -f "$img" ] || die "No finished ROM in $REL – out/ is NOT deleted"
   desk=$(desktop_dir); mkdir -p "$desk"
   c "ROM → $desk"
   local f
@@ -753,370 +754,306 @@ cmd_cleanup() {
   done
   for f in "$ota" "$img"; do
     [ "$(sha256sum < "$f")" = "$(sha256sum < "$desk/$(basename "$f")")" ] \
-      || die "Kopie von $(basename "$f") fehlerhaft – out/ wird NICHT gelöscht"
+      || die "Copy of $(basename "$f") is broken – out/ is NOT deleted"
   done
   if [ "${NOXIS_KEEP_OUT:-0}" = "1" ]; then
-    c "NOXIS_KEEP_OUT=1 – out/ bleibt erhalten"; return 0
+    c "NOXIS_KEEP_OUT=1 – out/ is kept"; return 0
   fi
   local o="$SRC/out"
-  [ -n "$SRC" ] && [ "$o" = "$SRC/out" ] || die "Unerwarteter out-Pfad: $o"
-  [ -d "$o" ] && [ -f "$SRC/build/envsetup.sh" ] || { c "out/ nicht vorhanden"; return 0; }
-  c "Lösche $o ($(du -sh "$o" 2>/dev/null | cut -f1))"
+  [ -n "$SRC" ] && [ "$o" = "$SRC/out" ] || die "Unexpected out path: $o"
+  [ -d "$o" ] && [ -f "$SRC/build/envsetup.sh" ] || { c "out/ not present"; return 0; }
+  c "Deleting $o ($(du -sh "$o" 2>/dev/null | cut -f1))"
   rm -rf -- "$o"
-  # signiertes target_files nur für Delta-OTAs nötig – Platz sparen
+  # the signed target_files is only needed for delta OTAs – save space
   rm -f -- "$REL"/Noxis-*-target_files.zip
-  c "Belegt jetzt: $(du -sh "$SRC" 2>/dev/null | cut -f1) Quellcode, ccache $(du -sh "${CCACHE_DIR:-$HOME/.cache/ccache}" 2>/dev/null | cut -f1)"
+  c "Now used: $(du -sh "$SRC" 2>/dev/null | cut -f1) source"
 }
 
 # ------------------------------------------------------------ flash
 latest() { ls -t "$REL"/Noxis-*-"$1" "$(desktop_dir)"/Noxis-*-"$1" 2>/dev/null | head -1 || true; }
 
-cmd_flash() {
-  need fastboot "android-tools installieren"
-  need adb "android-tools installieren"
-  local img ota
-  img=$(latest img.zip); ota=$(latest ota.zip)
-  [ -f "$img" ] && [ -f "$ota" ] || die "Erst ./noxis.sh sign"
-  c "ROM: $(basename "$ota")"
-  cat <<EOF
-
-  Vorbereitung (einmalig):
-   1. Nothing OS NICHT updaten – die Firmware soll zum Stand passen, aus
-      dem die Blobs stammen (./noxis.sh blobs).
-   2. Einstellungen → Telefoninfo → 7× Build-Nummer → Entwickleroptionen
-      → "OEM-Entsperrung" + "USB-Debugging" an.
-   3. Alles Wichtige vom Handy sichern – es wird komplett geloescht.
-   4. adb reboot bootloader  →  fastboot flashing unlock  → mit Lautstaerke bestaetigen
-
-EOF
-  confirm "Ist das Handy entsperrt und im Fastboot-Modus verbunden?" || exit 0
-  local prod; prod=$(fastboot getvar product 2>&1 | sed -n 's/^product: *//p')
-  # Das Phone (3a) meldet im Bootloader den Qualcomm-Plattformnamen
-  # "pineapple" statt "asteroids" - beides ist richtig.
-  case "${prod,,}" in
-    *asteroids*|pineapple) c "Gerät: $prod (Nothing Phone (3a))" ;;
-    *) confirm "Gerät meldet '$prod' statt Asteroids/pineapple. Trotzdem weiter?" || exit 1 ;;
-  esac
-  fastboot getvar unlocked 2>&1 | grep -q "unlocked: yes" \
-    || die "Bootloader ist gesperrt – erst: fastboot flashing unlock"
-
-  local tmp; tmp=$(mktemp -d)
-  unzip -q -o "$img" -d "$tmp"
-  mkdir -p "$REL"
-  cp -f "$tmp/vbmeta.img" "$REL/.vbmeta-flash.img"
-  c "Slot a aktiv setzen"
-  fastboot --set-active=a
-  # recovery gehoert dazu: das Phone (3a) hat eigene recovery_a/_b. Ohne sie
-  # startet die Nothing-Recovery, und die nimmt das Noxis-Paket nicht an.
-  local p sl n
-  for p in boot init_boot vendor_boot recovery dtbo vbmeta vbmeta_system vbmeta_vendor; do
-    [ -f "$tmp/$p.img" ] || continue
-    n=0
-    # Ausdruecklich in beide Slots: der Nothing-Bootloader meldet fuer
-    # init_boot/recovery/... kein has-slot, dann haengt fastboot kein _a an.
-    for sl in a b; do
-      c "flash ${p}_$sl"
-      if flash_teil "${p}_$sl" "$tmp/$p.img"; then n=$((n+1)); else warn "${p}_$sl gibt es nicht"; fi
-    done
-    [ "$n" -gt 0 ] || { c "flash $p"; flash_teil "$p" "$tmp/$p.img" || die "$p liess sich nicht flashen"; }
-  done
-  rm -rf "$tmp"
-  fastboot reboot recovery
-
-  cat <<EOF
-
-  Im Noxis-Recovery (lila Menue, "Active slot: a"):
-   1. "Factory reset" → "Format data / factory reset" → bestaetigen
-   2. Zurueck → "Apply update" → "Apply from ADB"
-
-EOF
-  read -rp "Wenn 'Apply from ADB' aktiv ist, Enter drücken … " _
-  c "Noxis OS installieren (die Signaturpruefung dauert 1-2 Minuten)"
-  adb sideload "$ota" || true
-  cat <<EOF
-
-  Bei ~94-100 % bleibt der PC stehen – das ist normal.
-  Auf dem Handy muss "Step 2/2" stehen. Die Zeile
-  "ERROR: ... f2fs ... linear_lookup: Permission denied" ist harmlos.
-
-   1. Frage "reboot to recovery now?" → "No"
-   2. NICHT "Reboot system now"!  → "Advanced" → "Reboot to bootloader"
-
-EOF
-  read -rp "Wenn das Handy wieder im Fastboot ist, Enter drücken … " _
-  fastboot devices | grep -q . || die "Kein Handy im Fastboot – Kabel pruefen, dann von Hand:
-       fastboot --disable-verity --disable-verification flash vbmeta_a $REL/.vbmeta-flash.img
-       (dasselbe fuer vbmeta_b), dann: fastboot reboot"
-  # Das Update hat vbmeta mit Pruefung neu geschrieben - wieder abschalten.
-  for sl in a b; do
-    c "vbmeta_$sl (Pruefung aus)"
-    flash_teil "vbmeta_$sl" "$REL/.vbmeta-flash.img" || warn "vbmeta_$sl ging nicht"
-  done
-  c "Aktiver Slot: $(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')"
-  fastboot reboot
-  cat <<EOF
-
-  Erster Start: Nothing-Logo → Noxis-Logo. Das dauert 5-15 Minuten
-  (Verschluesselung einrichten, Apps optimieren). Nichts druecken.
-
-  Danach:
-   1. Einrichten, dann Entwickleroptionen → USB-Debugging an
-      → am PC: ./noxis.sh nachinstall   (Mullvad, Tor Browser)
-   2. KernelSU-App öffnen → zeigt "Funktioniert" + Kernel-Version.
-   3. Root ist für ALLE Apps gesperrt. Freigabe nur einzeln:
-      KernelSU → Superuser → App antippen → Root erlauben.
-   4. Mullvad öffnen, anmelden – vorher gibt es kein Internet (Killswitch).
-   5. Bootloader BLEIBT offen – NICHT "fastboot flashing lock" ausführen,
-      das macht das Gerät mit Noxis OS unbootbar.
-
-  Haengt der Start ueber 15 Minuten: Leiser + Power 15 s halten → Fastboot.
-  Zurueck zu Nothing OS geht immer (Bootloader bleibt offen).
-
-EOF
-}
-
-# Ein Image flashen. vbmeta mit abgeschalteter Pruefung: mit Pruefung bricht
-# init beim Start ab und das Handy faellt in den Bootloader zurueck (Ursache
-# noch offen, siehe README "Known issues").
-flash_teil() {  # <partition> <image>
+# Flash one image. vbmeta with verification switched off: with verification
+# init aborts during boot and the phone drops back to the bootloader (cause
+# still open, see README "Known issues").
+flash_part() {  # <partition> <image>
   local -a fl=()
   case "$1" in vbmeta|vbmeta_a|vbmeta_b) fl=(--disable-verity --disable-verification) ;; esac
   fastboot "${fl[@]}" flash "$1" "$2"
 }
 
-# Debug: den ADB-Schluessel dieses PCs in init_boot + recovery einbauen und
-# ADB beim Start einschalten (Androids force_debuggable-Weg, wirkt nur bei
-# offenem Bootloader), damit "adb logcat" schon beim haengenden Start geht. Nur zur Fehlersuche –
-# danach mit ./noxis.sh flash wieder die normalen Images aufspielen.
-cmd_debugadb() {
-  need fastboot "android-tools installieren"
-  need adb "android-tools installieren"
-  local img key="$HOME/.android/adbkey.pub" mkb="$SRC/system/tools/mkbootimg" d="$REL/debug"
-  img=$(latest img.zip)
-  [ -f "$img" ] || die "Erst ./noxis.sh sign"
-  [ -f "$key" ] || { adb start-server >/dev/null 2>&1; sleep 1; }
-  [ -f "$key" ] || die "$key fehlt – einmal 'adb devices' ausfuehren"
-  [ -f "$mkb/mkbootimg.py" ] || die "$mkb fehlt (kommt mit ./noxis.sh sync)"
-  c "PC-Schluessel in init_boot + recovery einbauen"
-  python3 "$NOXIS/tools/noxis_adbkey.py" "$img" "$key" "$mkb" "$d" || die "Umbau fehlgeschlagen"
-  if ! fastboot devices | grep -q .; then
-    adb devices 2>/dev/null | grep -q "recovery$" && { c "Recovery → Bootloader"; adb reboot bootloader; sleep 8; }
-  fi
-  fastboot devices | grep -q . || die "Handy nicht im Fastboot (Leiser + Power 15 s halten)"
-  local p sl
-  for p in init_boot recovery; do
-    [ -f "$d/$p-adb.img" ] || continue
-    for sl in a b; do c "flash ${p}_$sl (Debug)"; fastboot flash "${p}_$sl" "$d/$p-adb.img"; done
+# Wait until the phone is in fastbootd (userspace fastboot in the recovery).
+# Right after "fastboot reboot fastboot" the bootloader may still answer for
+# a moment, so ask for is-userspace instead of just looking for a device.
+wait_fastbootd() {
+  local i
+  sleep 3
+  for i in $(seq 1 90); do
+    fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes" && return 0
+    sleep 1
   done
+  return 1
+}
+
+# Flashing writes everything directly with fastboot - no OTA via adb sideload.
+# Reason: on this phone an OTA from the recovery goes into the other slot as a
+# "virtual A/B" snapshot. If that slot never boots successfully, the bootloader
+# switches back to the old slot after a few tries, and "Format data" deletes
+# the snapshot. Written directly, slot a is complete and stays that way.
+cmd_flash() {
+  need fastboot "install android-tools"
+  local img
+  img=$(latest img.zip)
+  [ -f "$img" ] || die "Run ./noxis.sh sign first"
+  c "ROM: $(basename "$img")"
+  cat <<EOF
+
+  Preparation (once):
+   1. Do NOT update Nothing OS – the firmware should match the version the
+      blobs came from (./noxis.sh blobs).
+   2. Settings → About phone → tap "Build number" 7× → Developer options
+      → turn on "OEM unlocking" + "USB debugging".
+   3. Back up everything important – the phone gets wiped completely.
+   4. adb reboot bootloader  →  fastboot flashing unlock  → confirm with the volume keys
+
+EOF
+  confirm "Is the phone unlocked and connected in fastboot mode?" || exit 0
+  local prod; prod=$(fastboot getvar product 2>&1 | sed -n 's/^product: *//p')
+  # In the bootloader the Phone (3a) reports the Qualcomm platform name
+  # "pineapple" instead of "asteroids" - both are correct.
+  case "${prod,,}" in
+    *asteroids*|pineapple) c "Device: $prod (Nothing Phone (3a))" ;;
+    *) confirm "Device reports '$prod' instead of asteroids/pineapple. Continue anyway?" || exit 1 ;;
+  esac
+  fastboot getvar unlocked 2>&1 | grep -q "unlocked: yes" \
+    || die "The bootloader is locked – first: fastboot flashing unlock"
+
+  local tmp; tmp=$(mktemp -d)
+  unzip -q -o "$img" -d "$tmp"
+  c "Making slot a active"
+  fastboot --set-active=a
+  # 1) Boot images into BOTH slots. recovery belongs to it: the Phone (3a)
+  #    has its own recovery_a/_b. Explicit suffixes, because the Nothing
+  #    bootloader reports no has-slot for init_boot/recovery/... and fastboot
+  #    would then not append _a.
+  local p sl n
+  for p in boot init_boot vendor_boot recovery dtbo vbmeta vbmeta_system vbmeta_vendor; do
+    [ -f "$tmp/$p.img" ] || continue
+    n=0
+    for sl in a b; do
+      c "flash ${p}_$sl"
+      if flash_part "${p}_$sl" "$tmp/$p.img"; then n=$((n+1)); else warn "${p}_$sl does not exist"; fi
+    done
+    [ "$n" -gt 0 ] || { c "flash $p"; flash_part "$p" "$tmp/$p.img" || die "$p could not be flashed"; }
+  done
+  # 2) System partitions with fastbootd (userspace fastboot in the recovery)
+  c "→ fastbootd (the Noxis recovery starts, then it continues by itself)"
+  fastboot reboot fastboot
+  wait_fastbootd || die "fastbootd not reached – phone: Recovery → Advanced → Enter fastboot, then ./noxis.sh direct"
+  write_system "$tmp" a
+  rm -rf "$tmp"
   fastboot reboot
   cat <<EOF
 
-  Bootloop ohne ADB? Dann: Leiser+Power → Fastboot → fastboot reboot recovery
-  → adb shell cat /sys/fs/pstore/console-ramoops-0  (Kernel-Log vom Absturz)
+  First boot: Nothing logo → Noxis logo. This takes 5-15 minutes
+  (setting up encryption, optimising apps). Do not press anything.
+  If the recovery shows "Cannot load Android system": choose
+  "Factory data reset", then "Reboot system now".
 
-  Das Handy startet. Sobald das Noxis-Logo laeuft:
-    adb wait-for-device && adb logcat -b all -d > ~/noxis-logcat.txt; adb shell dmesg > ~/noxis-dmesg.txt 2>/dev/null
-  und ~/noxis-logcat.txt schicken. Spaeter: ./noxis.sh flash fuer die normalen Images.
+  After that:
+   1. Set up the phone, then Developer options → USB debugging on
+      → on the PC: ./noxis.sh postinstall   (Mullvad, Tor Browser)
+   2. Open the KernelSU app → shows "Working" + kernel version.
+   3. Root is blocked for ALL apps. Grant it only one by one:
+      KernelSU → Superuser → tap the app → allow root.
+   4. Open Mullvad and log in – there is no internet before that (kill switch).
+   5. The bootloader STAYS unlocked – do NOT run "fastboot flashing lock",
+      that makes the device unbootable with Noxis OS.
+
+  Boot hangs for more than 15 minutes: hold Volume down + Power 15 s → fastboot.
+  Going back to Nothing OS always works (the bootloader stays unlocked).
 
 EOF
 }
 
-# Sofort-Hilfe ohne Neubau fuer Builds, deren system_server an einer fehlenden
-# privapp-Berechtigung abstuerzt: init_boot laesst die Pruefung nur noch
-# protokollieren. ADB bleibt normal (aus, mit Freigabe-Dialog), die Recovery
-# wird wieder die normale. Gilt bis zum naechsten ./noxis.sh flash.
-cmd_bootfix() {
-  need fastboot "android-tools installieren"
-  local img mkb="$SRC/system/tools/mkbootimg" d="$REL/bootfix"
-  img=$(latest img.zip)
-  [ -f "$img" ] || die "Erst ./noxis.sh sign"
-  [ -f "$mkb/mkbootimg.py" ] || die "$mkb fehlt (kommt mit ./noxis.sh sync)"
-  python3 "$NOXIS/tools/noxis_adbkey.py" "$img" /dev/null "$mkb" "$d" --bootfix || die "Umbau fehlgeschlagen"
-  if ! fastboot devices | grep -q .; then
-    adb devices 2>/dev/null | grep -qE "(device|recovery)$" && { c "→ Bootloader"; adb reboot bootloader; sleep 8; }
-  fi
-  fastboot devices | grep -q . || die "Handy nicht im Fastboot (Leiser + Power 15 s halten)"
-  local tmp sl; tmp=$(mktemp -d)
-  unzip -q -o "$img" recovery.img -d "$tmp"
-  for sl in a b; do
-    c "flash init_boot_$sl (bootfix)"; fastboot flash "init_boot_$sl" "$d/init_boot-adb.img"
-    c "flash recovery_$sl (normal)";   fastboot flash "recovery_$sl" "$tmp/recovery.img"
+# Write the system partitions (system, vendor, product, ...) into one slot
+# with fastbootd: drop a pending update snapshot, free space in "super" (the
+# other slot's logical partitions and *-cow leftovers), flash, wipe data.
+write_system() {  # <folder with images> <slot>
+  local w="$1" slot="$2" other=b p lp
+  [ "$slot" = b ] && other=a
+  fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes" || die "not in fastbootd"
+  c "Dropping a pending update (snapshot)"
+  fastboot snapshot-update cancel || warn "no snapshot pending"
+  c "Making slot $slot active"; fastboot --set-active="$slot"
+  for lp in $(fastboot getvar all 2>&1 | sed -n 's/.*(bootloader) is-logical:\([^:]*\):yes.*/\1/p' | sort -u); do
+    case "$lp" in
+      *_"$other"|*-cow) c "deleting $lp"; fastboot delete-logical-partition "$lp" || true ;;
+    esac
   done
-  rm -rf "$tmp"
-  fastboot reboot
-  c "Handy startet – erster echter Start kann 5-10 Minuten dauern"
+  for p in system system_ext product vendor odm system_dlkm vendor_dlkm odm_dlkm; do
+    [ -f "$w/$p.img" ] || continue
+    c "flash $p"
+    fastboot flash "$p" "$w/$p.img" || die "$p failed – send the output to Claude"
+  done
+  c "Wiping data (fresh start)"
+  fastboot -w || warn "fastboot -w failed – then in the recovery: Format data"
 }
 
-# Echter Fix OHNE Neubau fuer die Bootschleife durch die fehlende privapp-
-# Berechtigung: system_ext.img aus dem fertigen Build auspacken, die Zeile in
-# privapp-permissions-noxis.xml ergaenzen, wieder einpacken und per fastbootd
-# flashen. SELinux-Labels (xattrs) bleiben erhalten (Auspacken als root mit
-# --xattrs, Datei wird an Ort und Stelle geaendert). Laeuft, weil Verified
-# Boot beim Flashen abgeschaltet wurde. Danach: Original-init_boot/recovery.
-# privapp-XML im Image an Ort und Stelle ergaenzen (gleiche Datei = das
-# SELinux-Label bleibt erhalten). Quelle: unsere Datei im Repo.
-xml_ergaenzen() {
-  sudo test -f "$1" || die "$1 fehlt im Image"
+# Write only the system partitions again (e.g. after ./noxis.sh sysextfix).
+# Uses a repaired system_ext if there is one.
+cmd_direct() {
+  need fastboot "install android-tools"
+  local img; img=$(latest img.zip)
+  [ -f "$img" ] || die "Run ./noxis.sh sign first"
+  local w="$REL/direct" p; rm -rf "$w"; mkdir -p "$w"
+  c "Unpacking images"
+  for p in system system_ext product vendor odm system_dlkm vendor_dlkm odm_dlkm; do
+    unzip -q -o "$img" "$p.img" -d "$w" 2>/dev/null || true
+  done
+  local fix="$REL/sysextfix/system_ext-fix.img"
+  [ -f "$fix" ] && { c "using the repaired system_ext"; cp -f "$fix" "$w/system_ext.img"; }
+  ls -la "$w"
+  if ! fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes"; then
+    fastboot devices | grep -q . || die "Phone not in fastboot (hold Volume down + Power)"
+    c "→ fastbootd"; fastboot reboot fastboot
+    wait_fastbootd || die "fastbootd not reached"
+  fi
+  write_system "$w" "${NOXIS_SLOT:-a}"
+  rm -rf "$w"
+  fastboot reboot
+  c "The phone boots Noxis from slot ${NOXIS_SLOT:-a} – first boot 5-15 minutes"
+}
+
+# Debug: put this PC's ADB key into init_boot + recovery and switch ADB on at
+# boot (Android's own force_debuggable mechanism, only works with an unlocked
+# bootloader), so "adb logcat" works even while the boot hangs. For debugging
+# only – afterwards flash the normal images again with ./noxis.sh flash.
+cmd_debugadb() {
+  need fastboot "install android-tools"
+  need adb "install android-tools"
+  local img key="$HOME/.android/adbkey.pub" mkb="$SRC/system/tools/mkbootimg" d="$REL/debug"
+  img=$(latest img.zip)
+  [ -f "$img" ] || die "Run ./noxis.sh sign first"
+  [ -f "$key" ] || { adb start-server >/dev/null 2>&1; sleep 1; }
+  [ -f "$key" ] || die "$key is missing – run 'adb devices' once"
+  [ -f "$mkb/mkbootimg.py" ] || die "$mkb is missing (comes with ./noxis.sh sync)"
+  c "Putting the PC key into init_boot + recovery"
+  python3 "$NOXIS/tools/noxis_adbkey.py" "$img" "$key" "$mkb" "$d" || die "Repacking failed"
+  if ! fastboot devices | grep -q .; then
+    adb devices 2>/dev/null | grep -q "recovery$" && { c "Recovery → bootloader"; adb reboot bootloader; sleep 8; }
+  fi
+  fastboot devices | grep -q . || die "Phone not in fastboot (hold Volume down + Power for 15 s)"
+  local p sl
+  for p in init_boot recovery; do
+    [ -f "$d/$p-adb.img" ] || continue
+    for sl in a b; do c "flash ${p}_$sl (debug)"; fastboot flash "${p}_$sl" "$d/$p-adb.img"; done
+  done
+  fastboot reboot
+  cat <<EOF
+
+  The phone boots. As soon as the Noxis logo shows, watch the log live:
+    while true; do if [ "\$(adb get-state 2>/dev/null)" = device ]; then adb logcat -b all | grep --line-buffered -E "FATAL|AndroidRuntime|F DEBUG|am_crash"; fi; sleep 1; done
+  Later: ./noxis.sh flash for the normal images.
+
+EOF
+}
+
+# Add privapp permissions to the XML inside an image, in place (same file =
+# the SELinux label stays). Source: our file in the repo.
+xml_add() {
+  sudo test -f "$1" || die "$1 is missing in the image"
   sudo python3 - "$1" "$NOXIS/vendor/noxis/permissions/privapp-permissions-noxis.xml" <<'PY'
 import re, sys
-ziel, quelle = sys.argv[1:]
-neu = set(re.findall(r'name="([\w.]+)"', open(quelle).read()))
-with open(ziel, "r+") as f:
+target, source = sys.argv[1:]
+new = set(re.findall(r'name="([\w.]+)"', open(source).read()))
+with open(target, "r+") as f:
     t = f.read()
-    da = set(re.findall(r'name="([\w.]+)"', t))
-    fehlt = sorted(p for p in neu - da if p.startswith("android.permission."))
-    if not fehlt:
-        print("  nichts zu ergaenzen"); sys.exit(0)
-    zeilen = "".join(f'        <permission name="{p}" />\n' for p in fehlt)
-    t = t.replace("    </privapp-permissions>", zeilen + "    </privapp-permissions>", 1)
+    have = set(re.findall(r'name="([\w.]+)"', t))
+    missing = sorted(p for p in new - have if p.startswith("android.permission."))
+    if not missing:
+        print("  nothing to add"); sys.exit(0)
+    lines = "".join(f'        <permission name="{p}" />\n' for p in missing)
+    t = t.replace("    </privapp-permissions>", lines + "    </privapp-permissions>", 1)
     f.seek(0); f.write(t); f.truncate()
-    for p in fehlt: print("  ergaenzt:", p)
+    for p in missing: print("  added:", p)
 PY
 }
 
-cmd_sysextfix() {
-  need fastboot "android-tools installieren"
-  need adb "android-tools installieren"
-  need fsck.erofs "sys-fs/erofs-utils installieren"
-  need mkfs.erofs "sys-fs/erofs-utils installieren"
-  # Hilfetext schreibt "--[no-]xattrs"
-  fsck.erofs --help 2>&1 | grep -q "xattrs" \
-    || die "fsck.erofs zu alt (kein --xattrs) – sys-fs/erofs-utils aktualisieren"
-  local img; img=$(latest img.zip)
-  [ -f "$img" ] || die "Erst ./noxis.sh sign"
-  local w="$REL/sysextfix"; sudo rm -rf "$w"; mkdir -p "$w"
-  c "system_ext.img auspacken"
-  unzip -q -o "$img" system_ext.img init_boot.img recovery.img -d "$w" || die "system_ext.img nicht im Paket"
-  # img.zip enthaelt oft "sparse"-Images (Android-Format) – erst entpacken
-  fs_typ() {
-    python3 - "$1" <<'PY'
+fs_type() {
+  python3 - "$1" <<'PY'
 import sys
 with open(sys.argv[1], "rb") as f:
     head = f.read(4); f.seek(1024); sb = f.read(4); f.seek(1080); e4 = f.read(2)
 if head == bytes.fromhex("3aff26ed"): print("sparse")
 elif sb == bytes.fromhex("e2e1f5e0"): print("erofs")
 elif e4 == bytes.fromhex("53ef"): print("ext4")
-else: print("unbekannt-" + head.hex())
+else: print("unknown-" + head.hex())
 PY
-  }
-  local typ; typ=$(fs_typ "$w/system_ext.img")
-  if [ "$typ" = sparse ]; then
-    need simg2img "dev-util/android-tools installieren (enthaelt simg2img)"
-    c "Sparse-Image entpacken"
+}
+
+# Real fix WITHOUT a rebuild for a boot loop caused by a missing privapp
+# permission: unpack system_ext.img from the finished build, add the line to
+# privapp-permissions-noxis.xml, pack it again. SELinux labels (xattrs) are
+# kept (EROFS: extract as root with --xattrs; ext4: mounted and edited in
+# place). Works because verified boot was switched off when flashing. Then
+# write it with ./noxis.sh direct.
+cmd_sysextfix() {
+  need fastboot "install android-tools"
+  local img; img=$(latest img.zip)
+  [ -f "$img" ] || die "Run ./noxis.sh sign first"
+  local w="$REL/sysextfix"; sudo rm -rf "$w"; mkdir -p "$w"
+  c "Unpacking system_ext.img"
+  unzip -q -o "$img" system_ext.img -d "$w" || die "system_ext.img is not in the package"
+  # img.zip often contains "sparse" images (Android format) – unpack first
+  local type; type=$(fs_type "$w/system_ext.img")
+  if [ "$type" = sparse ]; then
+    need simg2img "install dev-util/android-tools (contains simg2img)"
+    c "Unpacking the sparse image"
     simg2img "$w/system_ext.img" "$w/system_ext.raw" && mv -f "$w/system_ext.raw" "$w/system_ext.img"
-    typ=$(fs_typ "$w/system_ext.img")
+    type=$(fs_type "$w/system_ext.img")
   fi
-  c "Dateisystem: $typ"
+  c "File system: $type"
   local x_rel="etc/permissions/privapp-permissions-noxis.xml" mnt="$w/mnt"
-  case "$typ" in
+  case "$type" in
     erofs)
+      need fsck.erofs "install sys-fs/erofs-utils"; need mkfs.erofs "install sys-fs/erofs-utils"
+      # the help text says "--[no-]xattrs"
+      fsck.erofs --help 2>&1 | grep -q "xattrs" \
+        || die "fsck.erofs too old (no --xattrs) – update sys-fs/erofs-utils"
       sudo fsck.erofs --extract="$w/root" --xattrs --preserve "$w/system_ext.img" >/dev/null \
-        || die "Auspacken fehlgeschlagen"
-      xml_ergaenzen "$w/root/$x_rel"
-      c "system_ext.img neu packen"
-      sudo mkfs.erofs -zlz4hc "$w/system_ext-fix.img" "$w/root" >/dev/null || die "mkfs.erofs fehlgeschlagen"
+        || die "Unpacking failed"
+      xml_add "$w/root/$x_rel"
+      c "Packing system_ext.img again"
+      sudo mkfs.erofs -zlz4hc "$w/system_ext-fix.img" "$w/root" >/dev/null || die "mkfs.erofs failed"
       sudo chown "$(id -u):$(id -g)" "$w/system_ext-fix.img"
       sudo rm -rf "$w/root"
       ;;
     ext4)
-      need e2fsck "sys-fs/e2fsprogs installieren"; need resize2fs "sys-fs/e2fsprogs installieren"
+      need e2fsck "install sys-fs/e2fsprogs"; need resize2fs "install sys-fs/e2fsprogs"
       cp -f "$w/system_ext.img" "$w/system_ext-fix.img"
-      # Android packt ext4 mit geteilten Bloecken (nur lesbar) – erst Platz
-      # schaffen und die Bloecke aufteilen, dann laesst es sich beschreiben.
+      # Android packs ext4 with shared blocks (read-only) – make room first
+      # and unshare the blocks, then it can be written.
       truncate -s +512M "$w/system_ext-fix.img"
       e2fsck -fy -E unshare_blocks "$w/system_ext-fix.img" >/dev/null 2>&1 || true
-      resize2fs "$w/system_ext-fix.img" >/dev/null 2>&1 || die "resize2fs fehlgeschlagen"
+      resize2fs "$w/system_ext-fix.img" >/dev/null 2>&1 || die "resize2fs failed"
       e2fsck -fy -E unshare_blocks "$w/system_ext-fix.img" >/dev/null 2>&1 || true
       mkdir -p "$mnt"
-      sudo mount -o loop,rw "$w/system_ext-fix.img" "$mnt" || die "Image laesst sich nicht beschreibbar einhaengen"
-      xml_ergaenzen "$mnt/$x_rel" || { sudo umount "$mnt"; die "XML-Aenderung fehlgeschlagen"; }
+      sudo mount -o loop,rw "$w/system_ext-fix.img" "$mnt" || die "The image cannot be mounted writable"
+      xml_add "$mnt/$x_rel" || { sudo umount "$mnt"; die "Changing the XML failed"; }
       sync; sudo umount "$mnt"
       e2fsck -fy "$w/system_ext-fix.img" >/dev/null 2>&1 || true
       resize2fs -M "$w/system_ext-fix.img" >/dev/null 2>&1 || true
-      # Datei auf die neue Dateisystemgroesse kuerzen, sonst passt sie evtl.
-      # nicht mehr in die super-Partition
-      local groesse
-      groesse=$(dumpe2fs -h "$w/system_ext-fix.img" 2>/dev/null \
+      # Cut the file to the new file system size, otherwise it may no longer
+      # fit into the super partition
+      local size
+      size=$(dumpe2fs -h "$w/system_ext-fix.img" 2>/dev/null \
         | awk -F: '/^Block count/{gsub(/ /,"",$2);c=$2} /^Block size/{gsub(/ /,"",$2);b=$2} END{print c*b}')
-      [ "${groesse:-0}" -gt 0 ] && truncate -s "$groesse" "$w/system_ext-fix.img"
+      [ "${size:-0}" -gt 0 ] && truncate -s "$size" "$w/system_ext-fix.img"
       ;;
-    *) die "system_ext.img ist $typ – bitte Ausgabe an Claude schicken" ;;
+    *) die "system_ext.img is $type – send the output to Claude" ;;
   esac
   ls -la "$w/system_ext.img" "$w/system_ext-fix.img"
-
-  # Nach mehreren Fehlstarts schaltet der Bootloader selbst auf den anderen
-  # Slot zurueck (dort liegt dann noch Nothing OS). Noxis liegt in dem Slot,
-  # in den das Update installiert wurde: NOXIS_SLOT=b ./noxis.sh sysextfix
-  if [ -n "${NOXIS_SLOT:-}" ]; then
-    fastboot devices | grep -q . || { adb reboot bootloader 2>/dev/null; sleep 8; }
-    c "Slot $NOXIS_SLOT aktiv setzen"; fastboot --set-active="$NOXIS_SLOT"
-  fi
-  c "Handy in fastbootd bringen"
-  if adb devices 2>/dev/null | grep -qE "(device|recovery)$"; then adb reboot fastboot; sleep 10
-  elif fastboot devices | grep -q .; then fastboot reboot fastboot; sleep 10; fi
-  fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes" \
-    || die "Kein fastbootd. Handy: Recovery → Advanced → Enter fastboot, dann nochmal ./noxis.sh sysextfix"
-  c "Aktiver Slot: $(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')"
-  fastboot flash system_ext "$w/system_ext-fix.img" || die "Flashen von system_ext fehlgeschlagen (Platz in super?)"
-  c "Original init_boot + recovery (ohne Debug-Aenderungen)"
-  local sl
-  fastboot reboot bootloader; sleep 8
-  for sl in a b; do
-    fastboot flash "init_boot_$sl" "$w/init_boot.img"
-    fastboot flash "recovery_$sl" "$w/recovery.img"
-  done
-  sudo rm -rf "$w/root"
-  fastboot reboot
-  c "Handy startet – erster Start 5-15 Minuten"
-}
-
-# Noxis direkt per fastbootd in einen Slot schreiben – ohne Update-Paket
-# (adb sideload). Noetig, wenn das Update auf dem anderen Slot nie erfolgreich
-# gestartet hat: dann haengt dort ein nicht zusammengefuehrter Snapshot, und
-# nach "Format data" sind dessen Daten weg. Nimmt ein repariertes
-# system_ext (./noxis.sh sysextfix), falls vorhanden.
-cmd_direkt() {
-  need fastboot "android-tools installieren"
-  local img; img=$(latest img.zip)
-  [ -f "$img" ] || die "Erst ./noxis.sh sign"
-  local w="$REL/direkt"; rm -rf "$w"; mkdir -p "$w"
-  local logisch="system system_ext product vendor odm system_dlkm vendor_dlkm odm_dlkm"
-  c "Images auspacken"
-  local p
-  for p in $logisch; do unzip -q -o "$img" "$p.img" -d "$w" 2>/dev/null || true; done
-  local fix="$REL/sysextfix/system_ext-fix.img"
-  [ -f "$fix" ] && { c "repariertes system_ext verwenden"; cp -f "$fix" "$w/system_ext.img"; }
-  ls -la "$w"
-
-  if ! fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes"; then
-    fastboot devices | grep -q . || die "Handy nicht im Fastboot (Leiser + Power halten)"
-    c "→ fastbootd"; fastboot reboot fastboot
-  fi
-  fastboot getvar is-userspace 2>&1 | grep -q "is-userspace: yes" || die "fastbootd nicht erreicht"
-  c "Haengendes Update (Snapshot) verwerfen"
-  fastboot snapshot-update cancel || warn "kein Snapshot offen"
-  local slot="${NOXIS_SLOT:-a}"
-  c "Slot $slot aktiv setzen"; fastboot --set-active="$slot"
-  # Platz in "super" schaffen: die logischen Partitionen des ANDEREN Slots
-  # (dort lag nur das kaputte Update bzw. altes Nothing OS) und Snapshot-Reste
-  # (*-cow) loeschen. Der eigene Slot wird gleich komplett neu geschrieben.
-  local anderer=b; [ "$slot" = b ] && anderer=a
-  local lp
-  for lp in $(fastboot getvar all 2>&1 | sed -n 's/.*(bootloader) is-logical:\([^:]*\):yes.*/\1/p' | sort -u); do
-    case "$lp" in
-      *_"$anderer"|*-cow) c "loesche $lp"; fastboot delete-logical-partition "$lp" || true ;;
-    esac
-  done
-  for p in $logisch; do
-    [ -f "$w/$p.img" ] || continue
-    c "flash $p"
-    fastboot flash "$p" "$w/$p.img" || die "$p ging nicht – Ausgabe an Claude schicken"
-  done
-  c "Daten loeschen (frischer Start)"
-  fastboot -w || warn "fastboot -w ging nicht – dann in der Recovery: Format data"
-  rm -rf "$w"
-  fastboot reboot
-  c "Handy startet Noxis aus Slot $slot – erster Start 5-15 Minuten"
+  c "Repaired image ready. Write it: ./noxis.sh direct"
 }
 
 cmd_all() {
@@ -1135,13 +1072,12 @@ case "${1:-}" in
   build)  cmd_build ;;
   sign)   cmd_sign ;;
   flash)  cmd_flash ;;
-  nachinstall) cmd_nachinstall ;;
-  debugadb) cmd_debugadb ;;
-  bootfix) cmd_bootfix ;;
+  postinstall|nachinstall) cmd_postinstall ;;
+  direct|direkt) cmd_direct ;;
   sysextfix) cmd_sysextfix ;;
-  direkt) cmd_direkt ;;
+  debugadb) cmd_debugadb ;;
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '2,21p' "$0" ;;
+  *) sed -n '5,29p' "$0" ;;
 esac

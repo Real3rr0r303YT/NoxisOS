@@ -16,8 +16,7 @@ Nichts wird neu kompiliert: das Image wird ausgepackt, an die Ramdisk wird ein
 zweites cpio-Archiv mit /adb_keys angehaengt (der Kernel liest aneinander-
 gehaengte Archive nacheinander ein), dann wird es wieder eingepackt.
 
-Aufruf: noxis_adbkey.py <img.zip> <adbkey.pub> <mkbootimg-ordner> <ausgabe-ordner> [--bootfix]
-  --bootfix: nur init_boot, ohne offenes ADB, nur die privapp-Pruefung lockern
+Usage: noxis_adbkey.py <img.zip> <adbkey.pub> <mkbootimg-dir> <output-dir>
 """
 import gzip
 import os
@@ -56,7 +55,6 @@ def cpio_newc(files):
 ADB_DEBUG_PROP = b"""# Noxis OS debugadb - nur zur Fehlersuche
 persist.sys.usb.config=adb
 ro.adb.secure=0
-ro.control_privapp_permissions=log
 """
 
 # Recovery: adbd laeuft dort mit Schluessel, aber ohne Root - so kommt man
@@ -67,15 +65,6 @@ ro.secure=0
 ro.adb.secure=0
 ro.debuggable=1
 """
-
-# bootfix: nur die Startsperre loesen (fehlende privapp-Berechtigung wird
-# protokolliert statt system_server abstuerzen zu lassen). ADB bleibt normal:
-# aus, bis man es in den Entwickleroptionen einschaltet - mit Freigabe-Dialog.
-BOOTFIX_PROP = b"""# Noxis OS bootfix - bis zum naechsten Build
-ro.control_privapp_permissions=log
-"""
-
-
 
 def lz4_legacy_literal(data):
     """LZ4-Legacy-Rahmen mit einem Block, der nur aus Literalen besteht –
@@ -102,7 +91,7 @@ def patch(img, files, mkb, out):
             arg.pop()
         arg = [a.decode() for a in arg]
         if "--ramdisk" not in arg:
-            raise SystemExit(f"{img}: keine Ramdisk gefunden")
+            raise SystemExit(f"{img}: no ramdisk found")
         rd = arg[arg.index("--ramdisk") + 1]
         orig = open(rd, "rb").read()
         extra = cpio_newc(files)
@@ -111,7 +100,7 @@ def patch(img, files, mkb, out):
         elif orig[:2] == b"\x1f\x8b":
             extra = gzip.compress(extra)
         elif orig[:6] != b"070701":
-            raise SystemExit(f"{img}: unbekannte Ramdisk-Kompression {orig[:4].hex()}")
+            raise SystemExit(f"{img}: unknown ramdisk compression {orig[:4].hex()}")
         with open(rd, "wb") as f:
             f.write(orig + extra)
         subprocess.run([sys.executable, os.path.join(mkb, "mkbootimg.py"), *arg,
@@ -119,28 +108,23 @@ def patch(img, files, mkb, out):
 
 
 def main():
-    bootfix = "--bootfix" in sys.argv
-    argv = [a for a in sys.argv[1:] if a != "--bootfix"]
-    if len(argv) != 4:
+    if len(sys.argv) != 5:
         sys.exit(__doc__)
-    zipf, keyf, mkb, outdir = argv
+    zipf, keyf, mkb, outdir = sys.argv[1:]
     key = open(keyf, "rb").read()
-    if not key.strip() and not bootfix:
-        sys.exit(f"{keyf} ist leer")
+    if not key.strip():
+        sys.exit(f"{keyf} is empty")
     os.makedirs(outdir, exist_ok=True)
     with tempfile.TemporaryDirectory() as t, zipfile.ZipFile(zipf) as z:
-        for name in (("init_boot",) if bootfix else ("init_boot", "recovery")):
+        for name in ("init_boot", "recovery"):
             if f"{name}.img" not in z.namelist():
-                print(f"  {name}.img nicht im Paket – uebersprungen")
+                print(f"  {name}.img not in the package – skipped")
                 continue
             src = z.extract(f"{name}.img", t)
             dst = os.path.join(outdir, f"{name}-adb.img")
-            if bootfix:
-                files = [("force_debuggable", b""), ("adb_debug.prop", BOOTFIX_PROP)]
-            else:
-                files = [("adb_keys", key), ("force_debuggable", b"")]
-                files.append(("adb_debug.prop",
-                              ADB_DEBUG_PROP if name == "init_boot" else RECOVERY_DEBUG_PROP))
+            files = [("adb_keys", key), ("force_debuggable", b""),
+                     ("adb_debug.prop",
+                      ADB_DEBUG_PROP if name == "init_boot" else RECOVERY_DEBUG_PROP)]
             patch(src, files, mkb, dst)
             print(f"  {dst}")
 

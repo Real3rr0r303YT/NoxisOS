@@ -42,7 +42,7 @@ def main():
     pfad = sys.argv[1]
     fehlend = {z.strip() for z in sys.stdin if z.strip()}
     if not fehlend:
-        print("nichts zu entfernen")
+        print("nothing to remove")
         return 0
 
     with open(pfad, encoding="utf-8") as f:
@@ -57,14 +57,14 @@ def main():
             behalten.append(z)
 
     if not weg:
-        print("keiner der fehlenden Pfade steht in der Liste")
+        print("none of the missing paths is on the list")
         return 0
 
     with open(pfad, "w", encoding="utf-8") as f:
         f.writelines(behalten)
     for q in weg:
-        print("  entfernt: " + q)
-    print("%d Eintraege entfernt" % len(weg))
+        print("  removed: " + q)
+    print("%d entries removed" % len(weg))
     return 0
 
 

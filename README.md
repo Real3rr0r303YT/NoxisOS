@@ -36,14 +36,14 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
 ```bash
 ./noxis.sh check                    # RAM ≥ 32 GB (or 16 + 32 GB swap), ~300 GB free during the build
 ./noxis.sh sync                     # LineageOS 24.0 (--depth=1) + Noxis manifest + patches
-./noxis.sh apps                     # camera, PDF, Firefox (Fennec), Mullvad, Tor, KernelSU manager
+./noxis.sh apps                     # own apps, camera, PDF, Cromite, Mullvad, Tor, KernelSU manager
 ./noxis.sh blobs ~/Downloads/Asteroids-OTA.zip   # full Nothing OS OTA (B4.1-260928-1204)
-                                    #   other Nothing OS version / extracted dump: NOXIS_ANDERER_STAND=1
+                                    #   other Nothing OS version / extracted dump: NOXIS_OTHER_FIRMWARE=1
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
-./noxis.sh build                    # user build
-./noxis.sh sign                     # → ROM on the desktop, out/ is deleted
-./noxis.sh flash                    # guided: fastboot (both slots) → recovery → adb sideload → vbmeta
-./noxis.sh nachinstall              # after first boot: Mullvad + Tor Browser via adb (see below)
+./noxis.sh build                    # user build (checks privileged permissions first)
+./noxis.sh sign                     # → ROM on the desktop, out/ is deleted (NOXIS_KEEP_OUT=1 keeps it)
+./noxis.sh flash                    # guided: boot images (both slots) → fastbootd → system partitions
+./noxis.sh postinstall              # after first boot: Mullvad + Tor Browser via adb (see below)
 ./noxis.sh publish                  # signed OTA → GitHub release → phone updates itself
 ```
 
@@ -58,10 +58,21 @@ Full Nothing OS OTAs: <https://github.com/spike0en/nothing_archive>
 | Phase | Used |
 |---|---|
 | Sources after `sync` (`--depth=1`) | ~110 GB |
-| Peak during `build` (+ `out/` + 25 GB ccache) | ~280 GB |
-| After `sign` (out/ and target_files deleted) | ~135 GB (sources + ccache) |
+| Peak during `build` (+ `out/`) | ~250 GB |
+| After `sign` (out/ and target_files deleted) | ~110 GB |
 
-`NOXIS_KEEP_OUT=1` keeps `out/` (faster rebuilds), `NOXIS_CCACHE_SIZE=10G` shrinks the cache.
+`NOXIS_KEEP_OUT=1` keeps `out/` – the next build then takes minutes instead of hours.
+
+### Build environment
+
+| Variable | Effect |
+|---|---|
+| `NOXIS_KEEP_OUT=1` | keep `out/` after signing (fast rebuilds) |
+| `NOXIS_JOBS=n` | number of parallel jobs (default: (RAM + swap/2) / 4 GB) |
+| `NOXIS_DEBUG=1` | **debug build**: userdebug, ADB from the first boot without approval – for boot-loop hunting only |
+| `NOXIS_CCACHE=1` | turn ccache on (off by default, see Known issues) |
+| `NOXIS_OTHER_FIRMWARE=1` | allow blobs from a different Nothing OS version than the device tree expects |
+| `NOXIS_SRC=/path` | source tree on another disk |
 
 ## Own apps (Nothing design)
 
@@ -104,6 +115,7 @@ The ROM ships 3rr0r's own open-source apps instead of the LineageOS defaults. Th
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
 | Name | `vendor/lineage/config/version.mk` | "Noxis-1.0-DATE" in Settings |
+| Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS" with the Noxis logo instead of LineageOS |
 | Browser | `vendor/lineage/config/common.mk` | Jelly out; **Cromite** (hardened Chromium: site isolation, strong renderer sandbox) is the default browser, Firefox (Fennec) stays available |
 
 ## 3. KernelSU – root per app
@@ -176,35 +188,53 @@ Quick settings: microphone and camera toggles are visible by default.
 
 ## Flashing (`./noxis.sh flash`)
 
-The script walks you through every step and waits for you where the phone needs a tap:
+The script walks you through every step. Everything is written directly with fastboot – no OTA via `adb sideload` (see why below):
 
 | Step | What happens |
 |---|---|
 | 1 | Checks the phone: fastboot, unlocked, `asteroids` (the bootloader reports the Qualcomm name **`pineapple`** – that is correct) |
 | 2 | `fastboot --set-active=a`, then `boot`, `init_boot`, `vendor_boot`, `recovery`, `dtbo`, `vbmeta*` into **both slots** (`_a` and `_b`). The Nothing bootloader reports no `has-slot`, so the suffix is set explicitly – otherwise the stock recovery stays active |
 | 3 | `vbmeta` is flashed with `--disable-verity --disable-verification` (see [Known issues](#known-issues)) |
-| 4 | Reboots into the **Noxis recovery** → *Factory reset → Format data*, then *Apply update → Apply from ADB* |
-| 5 | `adb sideload` of the signed OTA. The PC stops at ~94–100 % and the phone shows *Step 2/2* – that means done. `ERROR: … f2fs … linear_lookup` is harmless |
-| 6 | Answer **No** to "reboot to recovery now?", then *Advanced → Reboot to bootloader* – **not** "Reboot system" yet |
-| 7 | The script flashes `vbmeta` (verification off) into both slots again – the OTA rewrote it – and reboots |
-| 8 | First boot: Nothing logo → Noxis boot animation, **5–15 minutes** (encryption setup, app optimisation) |
+| 4 | Reboots into **fastbootd** (userspace fastboot in the Noxis recovery) |
+| 5 | Drops a pending update snapshot, deletes the other slot's logical partitions and `*-cow` leftovers (otherwise `super` is full: *Not enough space to resize partition*), flashes `system`, `system_ext`, `product`, `vendor`, `odm`, `system_dlkm`, `vendor_dlkm` into slot a |
+| 6 | `fastboot -w` (wipe data) and reboot |
+| 7 | First boot: Nothing logo → Noxis boot animation, **5–15 minutes** (encryption setup, app optimisation). If the recovery says *Cannot load Android system*: *Factory data reset* → *Reboot system now* |
+
+**Why not `adb sideload`?** On this phone an OTA installed from the recovery goes into the *other* slot as a virtual A/B snapshot. If that slot does not boot successfully a few times, the bootloader marks it `slot-unbootable` and silently switches back to the old slot – which still contains Nothing OS' system with the Noxis kernel and crashes early. A *Format data* afterwards also deletes the snapshot. Written directly, slot a is complete and stays that way.
 
 ### After the first boot
 
 ```bash
-./noxis.sh nachinstall    # USB debugging on → installs Mullvad VPN + Tor Browser via adb
+./noxis.sh postinstall    # USB debugging on → installs Mullvad VPN + Tor Browser via adb
 ```
 
-Some vendor-signed APKs (Tor Browser, sometimes Mullvad) ship **compressed native libraries**. Android 17 only accepts pre-signed system apps with uncompressed libraries, and repacking would break the vendor's signature. `./noxis.sh build` detects this, keeps those apps out of the image and stores them in `nachinstallieren/`; `nachinstall` installs them as normal, still updatable apps.
+Some vendor-signed APKs (Tor Browser, sometimes Mullvad) ship **compressed native libraries**. Android 17 only accepts pre-signed system apps with uncompressed libraries, and repacking would break the vendor's signature. `./noxis.sh build` detects this, keeps those apps out of the image and stores them in `postinstall/`; `./noxis.sh postinstall` installs them as normal, still updatable apps.
 
 Stuck for more than 15 minutes: hold **Volume down + Power** for 15 s → fastboot. Going back to Nothing OS always works, the bootloader stays unlocked.
+
+### Repair and debugging without a rebuild
+
+| Command | Use |
+|---|---|
+| `./noxis.sh debugadb` | Puts your PC's ADB key into `init_boot`/`recovery` and switches ADB on during boot (Android's `force_debuggable`, unlocked bootloader only) – so `adb logcat` works while the boot hangs |
+| `./noxis.sh sysextfix` | Adds missing privileged permissions (from `vendor/noxis/permissions`) to `system_ext.img` of the finished build – EROFS or ext4, SELinux labels kept |
+| `./noxis.sh direct` | Writes only the system partitions again via fastbootd (uses the repaired `system_ext` if there is one) |
+| `fastboot getvar slot-unbootable:b` | Shows whether the bootloader gave up on a slot |
+
+Watch the boot log live (after `debugadb`):
+
+```bash
+while true; do if [ "$(adb get-state 2>/dev/null)" = device ]; then adb logcat -b all | grep --line-buffered -E "FATAL|AndroidRuntime|F DEBUG|am_crash"; fi; sleep 1; done
+```
 
 ## Known issues
 
 * **Verified boot is switched off when flashing.** With verification on, `init` aborts during boot and the phone drops back to the bootloader. Until the cause is found, `vbmeta` is flashed with `--disable-verity --disable-verification`. The images are still signed with your own keys.
-* **Firmware/blob version:** the device tree expects Nothing OS B4.1-260928-1204. Blobs from another version build fine with `NOXIS_ANDERER_STAND=1`, but camera, modem or fingerprint may misbehave.
+* **Missing privileged permissions = boot loop.** Since Android 17 `SCHEDULE_EXACT_ALARM` is `signature|privileged`; Noxis Guard asked for it without it being on the allowlist, and `system_server` crashed at every boot. Fixed, and `./noxis.sh build` now compares every privileged permission of our priv-apps with `vendor/noxis/permissions/*.xml` **before** building (`tools/noxis_privapp_check.py`).
+* **Firmware/blob version:** the device tree expects Nothing OS B4.1-260928-1204. Blobs from another version build fine with `NOXIS_OTHER_FIRMWARE=1`, but camera, modem or fingerprint may misbehave.
 * **Little RAM:** the Soong analysis needs 15–20 GB. With less than 32 GB RAM `./noxis.sh build` sets up 20 GB of compressed swap (zram, asks for sudo) – without it the kernel kills the analysis (`signal: killed`).
 * **ccache** is off by default (`ccache: error: Not a directory` inside the Android 17 build sandbox); `NOXIS_CCACHE=1` turns it back on for rebuilds.
+* **Git LFS:** the WebView prebuilts are LFS files. Without `git-lfs` during the sync only pointers arrive and the build fails late (`aapt2 dump badging … webview.apk`). `sync` now requires git-lfs and `build` fetches missing LFS files itself.
 
 ## Tests
 

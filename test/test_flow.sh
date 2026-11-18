@@ -63,7 +63,7 @@ cd "$NOXIS"
 find "$NOXIS/vendor/noxis/prebuilt" -delete 2>/dev/null
 
 ./noxis.sh check >/dev/null 2>&1;                        ok "check läuft" "true"
-./noxis.sh sync > "$W/sync.out" 2>&1;                    ok "sync" "grep -q 'Noxis-Produkt eingebunden' $W/sync.out && grep -q 'repo init -u https://github.com/LineageOS/android.git -b lineage-24.0' $LOG"
+./noxis.sh sync > "$W/sync.out" 2>&1;                    ok "sync" "grep -q 'Noxis product included' $W/sync.out && grep -q 'repo init -u https://github.com/LineageOS/android.git -b lineage-24.0' $LOG"
 ok "local manifest kopiert" "[ -f $NOXIS_SRC/.repo/local_manifests/noxis.xml ]"
 ok "vendor/noxis im Baum" "[ -f $NOXIS_SRC/vendor/noxis/packages/NoxisGuard/Android.bp ]"
 ok "KernelSU im Kernel-Config" "grep -q '^    vendor/asteroids_ksu.config' $NOXIS_SRC/device/nothing/asteroids/BoardConfig.mk"
@@ -82,7 +82,7 @@ ok "apps: Mullvad + Tor (aarch64, neueste stabile)" "[ -f vendor/noxis/prebuilt/
 ok "apps: KernelSU-Manager v3.3.1 (passend zum Kernel)" "[ -f vendor/noxis/prebuilt/KernelSU/KernelSU.apk ] && grep -q 'KernelSU_v3.3.1_32703-release.apk' $W/apps.out"
 ok "apps: alle Apps im Produkt" "grep -q 'PRODUCT_PACKAGES += KernelSU' vendor/noxis/config/noxis.mk && grep -q 'PRODUCT_PACKAGES += TorBrowser' vendor/noxis/config/noxis.mk"
 ok "apps: Jelly durch Firefox ersetzt" "! grep -q '    Jelly' $NOXIS_SRC/vendor/lineage/config/common.mk"
-./noxis.sh build > "$W/b0.out" 2>&1;                     ok "build ohne Blobs bricht ab" "grep -q 'Erst ./noxis.sh blobs' $W/b0.out"
+./noxis.sh build > "$W/b0.out" 2>&1;                     ok "build ohne Blobs bricht ab" "grep -q 'Run ./noxis.sh blobs' $W/b0.out"
 echo zip > "$W/ota.zip"
 ./noxis.sh blobs "$W/ota.zip" > "$W/blobs.out" 2>&1;     ok "blobs" "grep -q 'B4.1-260928-1204' $W/blobs.out && grep -q 'extract $W/ota.zip' $LOG"
 ./noxis.sh keys > "$W/keys.out" 2>&1;                    ok "keys" "[ -f $NOXIS_KEYS/releasekey.pk8 ] && [ -f $NOXIS_KEYS/avb.pem ]"
@@ -99,12 +99,12 @@ ok "cleanup: out/ gelöscht" "[ ! -d $NOXIS_SRC/out ]"
 ok "cleanup: Quellcode unangetastet" "[ -f $NOXIS_SRC/build/envsetup.sh ] && [ -d $NOXIS_SRC/device/nothing/asteroids ]"
 ok "cleanup: target_files weg, OTA bleibt" "! ls $NOXIS_OUT/*-target_files.zip >/dev/null 2>&1 && ls $NOXIS_OUT/*-ota.zip >/dev/null"
 ./noxis.sh cleanup > "$W/c2.out" 2>&1
-ok "cleanup: zweiter Lauf ohne out/ ok" "grep -q 'out/ nicht vorhanden' $W/c2.out"
+ok "cleanup: zweiter Lauf ohne out/ ok" "grep -q 'out/ not present' $W/c2.out"
 printf 'ja\n\n' | ./noxis.sh flash > "$W/flash.out" 2>&1
-ok "flash: Reihenfolge boot→vendor_boot→dtbo→vbmeta" "grep -o 'fastboot flash [a-z_]*' $LOG | awk '{print \$3}' | paste -sd, | grep -q '^boot,vendor_boot,dtbo,vbmeta,vbmeta_system,vbmeta_vendor\$'"
-ok "flash: sideload OTA" "grep -q 'adb sideload .*-ota.zip' $LOG"
+ok "flash: boot images into both slots, recovery included" "grep -q 'fastboot.* flash boot_a' $LOG && grep -q 'fastboot.* flash boot_b' $LOG && grep -q 'fastboot.* flash recovery_a' $LOG"
+ok "flash: system partitions via fastbootd" "grep -q 'fastboot reboot fastboot' $LOG && grep -q 'fastboot flash system ' $LOG"
 ok "flash: Bootloader wird nie gesperrt" "! grep -q 'flashing lock\|avb_custom_key' $LOG"
-ok "flash: Hinweis Root pro App" "grep -q 'Superuser → App antippen' $W/flash.out"
+ok "flash: Hinweis Root pro App" "grep -q 'Superuser → tap the app' $W/flash.out"
 
 find "$NOXIS/vendor/noxis/prebuilt" -delete 2>/dev/null
 echo; echo "$pass bestanden, $fail fehlgeschlagen"; echo "Logs: $W"

@@ -2,13 +2,13 @@
 # Noxis OS – Made by 3rr0r303YT on TikTok
 # https://github.com/Real3rr0r303YT/NoxisOS
 #
-# Herstellerdateien, die Noxis bewusst nicht mitnimmt. ./noxis.sh blobs
-# streicht sie vor jeder Extraktion aus proprietary-files.txt - auch nach
-# einem 'repo sync', der die Liste zuruecksetzt.
+# Vendor files Noxis leaves out on purpose. ./noxis.sh blobs removes them
+# from proprietary-files.txt before every extraction - also after a
+# 'repo sync' that resets the list.
 
-# --- Verizon / US-Mobilfunk ---------------------------------------------
-# Nur in US-Firmware vorhanden. Auf einem EU-Abzug fehlen die Dateien, und
-# extract-files.py bricht daran ab.
+# --- Verizon / US carrier -----------------------------------------------
+# Only in US firmware. An EU dump does not have these files, and
+# extract-files.py stops on them.
 product/app/VZWAPNLib/VZWAPNLib.apk
 product/etc/permissions/com.verizon.apn.xml
 product/etc/permissions/com.verizon.services.xml
@@ -19,10 +19,10 @@ system_ext/etc/permissions/vzw_mvs_permissions.xml
 system_ext/priv-app/MyVerizonServices/MyVerizonServices.apk
 
 # --- Miracast (Wi-Fi Display) --------------------------------------------
-# Ein Dienst, der im Netz lauscht und Verbindungen annimmt - Angriffsflaeche
-# ohne Nutzen fuer ein OPSEC-Telefon. Ausserdem haengen neuere Fassungen an
-# libheif, das LineageOS nicht hat: der Bau scheitert dann schon beim
-# Einlesen ("libwfdcommonutils depends on undefined module libheif").
+# A service that listens on the network and accepts connections - attack
+# surface without use for an OPSEC phone. Newer versions also depend on
+# libheif, which LineageOS does not have: the build then fails right at
+# the start ("libwfdcommonutils depends on undefined module libheif").
 system/framework/WfdCommon.jar
 system_ext/bin/wfdservice
 system_ext/etc/init/wfdservice.rc
@@ -52,6 +52,6 @@ system_ext/lib64/vendor.qti.hardware.wifidisplaysession@1.0.so
 system_ext/lib64/vendor.qti.hardware.wifidisplaysession_aidl-V2-ndk.so
 system_ext/priv-app/WfdService/WfdService.apk
 
-# --- Sonstiges ---------------------------------------------------------
-# Schriftart der Nothing-Kamera, fehlt in manchen Staenden.
+# --- Other --------------------------------------------------------------
+# Font of the Nothing camera, missing in some versions.
 vendor/etc/camera/Ndot-55.otf

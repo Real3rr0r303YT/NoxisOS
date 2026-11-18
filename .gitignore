@@ -4,7 +4,7 @@ out/
 __pycache__/
 *.class
 vendor/nothing/
-nachinstallieren/
+postinstall/
 vendor/noxis/prebuilt/
 release/
 vendor/noxis/config/noxis_debug.mk

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Noxis OS – Made by 3rr0r303YT on TikTok
-// Einrichtungs-Assistent: "Willkommen bei Noxis OS" statt LineageOS.
+// Setup wizard: "Welcome to NoxisOS" and the Noxis logo instead of LineageOS.
 runtime_resource_overlay {
     name: "NoxisSetupWizardOverlay",
     certificate: "platform",

@@ -34,17 +34,17 @@ run() {
   PATH="$T/bin:$PATH" bash -c "set -euo pipefail
 c(){ echo \"[c] \$*\"; }; die(){ echo \"[die] \$*\"; exit 1; }; need(){ command -v \"\$1\" >/dev/null || die \"\$1 fehlt\"; }
 desktop_dir(){ echo '$T/desk'; }
-NOXIS='$REPO'; OUT='$T/out'; DEVICE=asteroids
+NOXIS='$REPO'; REL='$T/out'; DEVICE=asteroids
 $block
 cmd_publish" 2>&1
 }
 git -C "$REPO" config user.email t@t; git -C "$REPO" config user.name t
 
-out=$(run); grep -q "Keine signierte OTA" <<<"$out" && ok "no OTA → clear error" || bad "no OTA: $out"
+out=$(run); grep -q "No signed OTA" <<<"$out" && ok "no OTA → clear error" || bad "no OTA: $out"
 mkota "$T/desk/Noxis-1.0-20261111-asteroids-ota.zip" 0
-out=$(run); grep -q "ohne Signaturzertifikat" <<<"$out" && ok "unsigned OTA refused" || bad "unsigned: $out"
+out=$(run); grep -q "without signing certificate" <<<"$out" && ok "unsigned OTA refused" || bad "unsigned: $out"
 mkota "$T/desk/Noxis-1.0-20261111-asteroids-ota.zip" 1
-out=$(run); echo "$out" | grep -q "Veröffentlicht" && ok "publish runs through" || bad "publish: $out"
+out=$(run); echo "$out" | grep -q "Published" && ok "publish runs through" || bad "publish: $out"
 grep -q "gh release create noxis-20261111 $T/desk/Noxis-1.0-20261111-asteroids-ota.zip" "$T/gh.log" && ok "release tag noxis-20261111 with OTA + .sha256" || bad "gh call: $(cat "$T/gh.log")"
 J="$REPO/ota/asteroids.json"
 python3 - "$J" "$T/desk/Noxis-1.0-20261111-asteroids-ota.zip" <<'PY' && ok "Updater JSON: datetime from OTA metadata, size, sha256 id, release URL" || bad "json: $(cat "$J")"

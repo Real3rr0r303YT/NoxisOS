@@ -2,8 +2,8 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later
      Noxis OS – Made by 3rr0r303YT on TikTok -->
 <resources>
-    <!-- "Welcome to %1$s" und alle anderen Stellen, die den Namen einsetzen -->
-    <string name="os_name" translatable="false">Noxis OS</string>
-    <string name="setup_services">Noxis OS features</string>
+    <!-- "Welcome to %1$s" and every other place that inserts the OS name -->
+    <string name="os_name" translatable="false">NoxisOS</string>
+    <string name="setup_services">NoxisOS features</string>
     <string name="services_privacy_policy_uri" translatable="false">https://github.com/Real3rr0r303YT/NoxisOS</string>
 </resources>

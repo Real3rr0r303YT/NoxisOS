@@ -28,7 +28,7 @@ A = "{http://schemas.android.com/apk/res/android}"
 def privilegierte(src):
     mf = os.path.join(src, "frameworks/base/core/res/AndroidManifest.xml")
     if not os.path.exists(mf):
-        sys.exit(f"[privapp] {mf} fehlt – erst ./noxis.sh sync")
+        sys.exit(f"[privapp] {mf} is missing – run ./noxis.sh sync first")
     out = set()
     for p in ET.parse(mf).getroot().iter("permission"):
         lvl = p.get(A + "protectionLevel", "")
@@ -58,11 +58,11 @@ def main():
         fehlt = sorted(brauchen - erlaubt.get(pkg, set()))
         if fehlt:
             fehler += 1
-            print(f"[privapp] {pkg}: fehlt in vendor/noxis/permissions/*.xml:")
+            print(f"[privapp] {pkg}: missing in vendor/noxis/permissions/*.xml:")
             for f in fehlt:
                 print(f'          <permission name="{f}" />')
         else:
-            print(f"[privapp] {pkg}: {len(brauchen)} privilegierte Berechtigungen, alle erlaubt")
+            print(f"[privapp] {pkg}: {len(brauchen)} privileged permissions, all allowed")
     sys.exit(1 if fehler else 0)
 
 
