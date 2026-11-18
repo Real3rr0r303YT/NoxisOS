@@ -162,7 +162,10 @@ cmd_check() {
   ram=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
   disk=$(df -BG --output=avail "$(dirname "$SRC")" | tail -1 | tr -dc 0-9)
   c "RAM: ${ram} GB (32+ recommended, 16 GB only with 32 GB swap)"
-  c "Free space at $(dirname "$SRC"): ${disk} GB (~400 GB needed)"
+  # Source already synced → only out/ still needs space
+  local want=400 min=350 what="110 GB source, the rest out/"
+  [ -d "$SRC/.repo" ] && { want=150; min=150; what="source already there, out/ only"; }
+  c "Free space at $(dirname "$SRC"): ${disk} GB (~$want GB needed – $what)"
   local swap
   swap=$(awk '/SwapTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
   c "Swap: ${swap} GB"
@@ -173,8 +176,8 @@ cmd_check() {
          sudo fallocate -l 32G /swapfile && sudo chmod 600 /swapfile
          sudo mkswap /swapfile && sudo swapon /swapfile"
   fi
-  if [ "$disk" -lt 350 ]; then
-    warn "Not enough space: ${disk} GB free, about 400 GB needed (110 GB source, the rest out/).
+  if [ "$disk" -lt "$min" ]; then
+    warn "Not enough space: ${disk} GB free, about $want GB needed ($what).
        This only fails after hours. What uses the most:
          du -xh --max-depth=1 \$HOME | sort -rh | head"
   fi
