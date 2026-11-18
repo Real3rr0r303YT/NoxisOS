@@ -48,7 +48,12 @@ DEVICE="asteroids"
 if [ "${NOXIS_DEBUG:-0}" = 1 ]; then VARIANT="${NOXIS_VARIANT:-userdebug}"; else VARIANT="${NOXIS_VARIANT:-user}"; fi
 export NOXIS_DEBUG="${NOXIS_DEBUG:-0}"
 SUBJECT="${NOXIS_SUBJECT:-/C=DE/O=Noxis OS/OU=Noxis/CN=Noxis OS}"
-KSU_TAG="${NOXIS_KSU_TAG:-}"   # empty = pick the release that matches the kernel
+# KernelSU: the kernel tree brings its own copy (crDroid, often an unreleased
+# main-branch state). By default it is replaced with this official release,
+# so kernel and the officially signed manager of the same release match
+# exactly. NOXIS_KSU_PIN=none keeps the kernel tree's own copy.
+KSU_PIN="${NOXIS_KSU_PIN:-v3.3.1}"
+KSU_TAG="${NOXIS_KSU_TAG:-}"   # empty = the pinned release, or the one matching the kernel
 # Old (German) variable names keep working
 NOXIS_OTHER_FIRMWARE="${NOXIS_OTHER_FIRMWARE:-${NOXIS_ANDERER_STAND:-0}}"
 
@@ -387,6 +392,7 @@ ksu_release_uapi() {  # <tag> → UAPI version of that release (empty if unknown
 
 ksu_tag() {
   [ -n "$KSU_TAG" ] && { echo "$KSU_TAG"; return 0; }
+  [ "$KSU_PIN" != none ] && { echo "$KSU_PIN"; return 0; }
   local want tag have tags
   want=$(ksu_kernel_uapi)
   if [ -z "$want" ]; then
@@ -436,6 +442,31 @@ ksu_download() {  # <tag> <target.apk>
     c "KernelSU manager ← $url"
     curl -fL --progress-bar --max-time 900 -o "$out" "$url" || return 1
   fi
+}
+
+# Replace the kernel tree's KernelSU copy with the official release KSU_PIN.
+# The source comes as a tarball (no .git), so KernelSU's Kbuild would fall
+# back to version 16 - the version number is written in from the release's
+# manager APK name (KernelSU_v3.3.1_32703-release.apk → 32703).
+ksu_pin() {
+  [ "$KSU_PIN" = none ] && return 0
+  local dir="$SRC/kernel/nothing/sm7635/KernelSU" mark tmp ver
+  [ -d "$dir" ] || { warn "KernelSU: $dir missing – kernel not synced?"; return 0; }
+  mark="$dir/.noxis-pin"
+  [ "$(cat "$mark" 2>/dev/null)" = "$KSU_PIN" ] && { c "KernelSU in the kernel: $KSU_PIN"; return 0; }
+  ver=$(gh_tag_asset tiann/KernelSU "$KSU_PIN" 'KernelSU.*\.apk$' | sed -n 's/.*_\([0-9]\{5\}\)-release\.apk$/\1/p')
+  [ -n "$ver" ] || die "KernelSU $KSU_PIN: version number not found (release missing?)"
+  c "KernelSU in the kernel → official $KSU_PIN (version $ver)"
+  tmp=$(mktemp -d)
+  curl -fsSL --max-time 600 "https://github.com/tiann/KernelSU/archive/refs/tags/$KSU_PIN.tar.gz" \
+    | tar -xz -C "$tmp" --strip-components=1 || { rm -rf "$tmp"; die "KernelSU $KSU_PIN: download failed"; }
+  [ -f "$tmp/kernel/Kbuild" ] || { rm -rf "$tmp"; die "KernelSU $KSU_PIN: unexpected archive"; }
+  sed -i "s/-DKSU_VERSION=16/-DKSU_VERSION=$ver/" "$tmp/kernel/Kbuild"
+  grep -q "DKSU_VERSION=$ver" "$tmp/kernel/Kbuild" || { rm -rf "$tmp"; die "KernelSU: version line not found in Kbuild"; }
+  find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  cp -a "$tmp/." "$dir/"
+  echo "$KSU_PIN" > "$mark"
+  rm -rf "$tmp"
 }
 
 # Only the KernelSU manager: download the matching one and, if the phone is
@@ -707,6 +738,7 @@ cmd_build() {
   fi
   apks_check
   lfs_check
+  ksu_pin
   zram_on
   envsetup
   # ccache is off: on the first build the cache is empty and does not help,
