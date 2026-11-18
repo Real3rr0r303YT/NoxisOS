@@ -36,7 +36,7 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
 ```bash
 ./noxis.sh check                    # RAM ≥ 32 GB (or 16 + 32 GB swap), ~300 GB free during the build
 ./noxis.sh sync                     # LineageOS 24.0 (--depth=1) + Noxis manifest + patches
-./noxis.sh apps                     # own apps, camera, PDF, IronFox, F-Droid, Aurora, Termux, Mullvad, Tor, KernelSU
+./noxis.sh apps                     # own apps, IronFox, F-Droid, Aurora, Termux, Mullvad, Tor, KernelSU, ClamAV signatures, KSU modules
 ./noxis.sh blobs ~/Downloads/Asteroids-OTA.zip   # full Nothing OS OTA (B4.1-260928-1204)
                                     #   other Nothing OS version / extracted dump: NOXIS_OTHER_FIRMWARE=1
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
@@ -140,6 +140,12 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 
 Just the manager, installed straight onto the connected phone: `./noxis.sh ksu` (for a kernel built with `NOXIS_KSU_PIN=none`: `NOXIS_KSU_PIN=none ./noxis.sh ksu`).
 
+### KernelSU modules (`ksu-modules/`)
+
+`./noxis.sh apps` zips every folder in `ksu-modules/` into `postinstall/modules/`, `./noxis.sh postinstall` pushes it to *Download* and installs it with `ksud` (allow **Shell** once in KernelSU → Superuser, or install it by hand: KernelSU → Modules → Install → Download/…zip).
+
+* **NoxisSpoof** – apps see another phone model through `android.os.Build` (brand, manufacturer, model of system/product/system_ext). Profiles: Galaxy A55 (default), Galaxy S24, Pixel 8, Pixel 7a – **Action** button in KernelSU's module list switches, then reboot. vendor/odm values stay real so camera, modem and sensors keep working. Honest limit: it hides the model from simple apps and sites, not from apps that fingerprint hardware, kernel or Play Integrity.
+
 ## 4. Firewall matrix (LineageOS per-app network access)
 
 Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi-Fi**, **Mobile data**, **VPN**, **Background data**.
@@ -164,6 +170,7 @@ Setting: *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi
 The security center of Noxis OS – **Settings → Noxis Guard** (top of the settings) or the app icon.
 
 * **Protection status** – reads the real system state and shows e.g. *7 of 8 protections active*, with a hint for every missing one (killswitch, encrypted DNS, 2G off, USB lock, auto-reboot, no Google connectivity check, random MAC, hidden lock-screen notifications)
+* **Virus scan** – checks every user app against ClamAV's Android malware signatures (MD5/SHA-1/SHA-256 of the APK) and for trojan patterns: active accessibility service, device admin, notification access, SMS + overlay (banking trojans), overlay + app install (droppers), installed outside F-Droid/Aurora. **New apps are checked right at install** and a hit shows a notification. Fully offline: `./noxis.sh apps` fetches the ClamAV databases on the PC, keeps only Android signatures and puts them into the image as sorted index files (`/product/etc/noxis/av`) – Guard binary-searches them, no RAM cost. Signatures update with every Noxis build. Limits: hashes only find *known* samples; the patterns catch new ones, nothing finds everything.
 * **Shortcuts** – KernelSU root grants, per-app network access, default apps (browser, phone), system updates, Mullvad
 
 | Function | Default |

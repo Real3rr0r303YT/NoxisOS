@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later
+     Noxis OS – Made by 3rr0r303YT on TikTok
+     Noxis Guard may report malware found by the virus scan without asking first. -->
+<exceptions>
+    <exception package="com.noxis.guard">
+        <permission name="android.permission.POST_NOTIFICATIONS" fixed="false" />
+    </exception>
+</exceptions>

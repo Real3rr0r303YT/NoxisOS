@@ -58,6 +58,7 @@ public class GuardActivity extends Activity {
         mList.addView(sub);
 
         statusCard();
+        scanSection();
 
         header("Gerätesperre");
         choice("Automatischer Neustart", hoursLabel(Prefs.autoRebootHours(this)),
@@ -131,6 +132,67 @@ public class GuardActivity extends Activity {
             t.setPadding(dp(8), dp(4), dp(8), dp(4));
             mList.addView(t);
         }
+    }
+
+    /* ---------------- Virenscan ---------------- */
+
+    private Scanner.Result mScan;
+    private boolean mScanning;
+
+    private void scanSection() {
+        header("Virenscan");
+        int sigs = Scanner.loadDb();
+        String db = sigs > 0
+                ? sigs + " ClamAV-Signaturen für Android" + (mScanVersion().isEmpty() ? "" : " · " + mScanVersion())
+                : "Keine Signaturen im Image – nur Verhaltensprüfung";
+        String summary;
+        if (mScanning) {
+            summary = "Prüfe Apps …";
+        } else if (mScan == null) {
+            summary = "Prüft alle installierten Apps. Neue Apps werden automatisch geprüft.\n" + db;
+        } else {
+            summary = mScan.apps + " Apps geprüft, " + mScan.findings.size() + " Funde\n" + db;
+        }
+        LinearLayout row = row("Jetzt prüfen", summary);
+        row.addView(text("›", 22, false));
+        row.setOnClickListener(v -> {
+            if (mScanning) return;
+            mScanning = true;
+            render();
+            new Thread(() -> {
+                Scanner.Result r = Scanner.scanAll(this);
+                runOnUiThread(() -> {
+                    mScan = r;
+                    mScanning = false;
+                    render();
+                });
+            }, "noxis-scan").start();
+        });
+        mList.addView(row);
+        if (mScan == null) return;
+        if (mScan.findings.isEmpty()) {
+            TextView t = text("✓  Nichts Verdächtiges gefunden", 14, false);
+            t.setTextColor(0xFF7CFFB2);
+            t.setPadding(dp(8), dp(4), dp(8), dp(4));
+            mList.addView(t);
+        }
+        for (Scanner.Finding f : mScan.findings) {
+            LinearLayout r = row((f.malware ? "✗  " : "!  ") + f.label, f.pkg + "\n" + f.reason);
+            ((TextView) ((LinearLayout) r.getChildAt(0)).getChildAt(0))
+                    .setTextColor(f.malware ? 0xFFFF6B6B : 0xFFFFB27C);
+            r.addView(text("›", 22, false));
+            r.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.fromParts("package", f.pkg, null)));
+                } catch (RuntimeException e) { /* App schon weg */ }
+            });
+            mList.addView(r);
+        }
+    }
+
+    private static String mScanVersion() {
+        return Scanner.versionLabel();
     }
 
     private void links() {

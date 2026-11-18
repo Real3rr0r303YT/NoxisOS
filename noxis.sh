@@ -7,7 +7,7 @@
 #
 #  ./noxis.sh check              Check the PC (RAM, disk, tools)
 #  ./noxis.sh sync               Fetch the source (--depth=1, ~110 GB) + add Noxis
-#  ./noxis.sh apps               Own apps, camera/PDF, IronFox, F-Droid, Aurora, Termux, Mullvad, Tor, KernelSU manager
+#  ./noxis.sh apps               Own apps, IronFox, F-Droid, Aurora, Termux, ClamAV DB, KSU modules, Mullvad, Tor, KernelSU manager
 #  ./noxis.sh blobs <ota|dump>   Extract the vendor files from a Nothing OS OTA or dump
 #  ./noxis.sh blobs <ota> --regen
 #                                Same, but rewrite the file list from the dump -
@@ -147,13 +147,28 @@ cmd_postinstall() {
   need adb "install android-tools"
   # old folder name from earlier versions
   [ -d "$NOXIS/nachinstallieren" ] && { mkdir -p "$POST"; mv -n "$NOXIS/nachinstallieren"/*.apk "$POST"/ 2>/dev/null || true; }
-  ls "$POST"/*.apk >/dev/null 2>&1 || { c "Nothing to install"; return 0; }
+  compgen -G "$POST/*.apk" >/dev/null || compgen -G "$POST/modules/*.zip" >/dev/null \
+    || { c "Nothing to install"; return 0; }
   c "Connect the phone with USB debugging (Settings → Developer options)"
   adb wait-for-device
-  local a
+  local a z
   for a in "$POST"/*.apk; do
+    [ -f "$a" ] || continue
     c "installing $(basename "$a" .apk)"
     adb install -r "$a" || warn "$(basename "$a") failed"
+  done
+  # KernelSU modules: copy to Download, then install with root. adb shell
+  # only gets root after you allow "Shell" in the KernelSU app once.
+  for z in "$POST"/modules/*.zip; do
+    [ -f "$z" ] || continue
+    adb push "$z" "/sdcard/Download/$(basename "$z")" >/dev/null
+    if adb shell "su -c '/data/adb/ksud module install /sdcard/Download/$(basename "$z")'" ; then
+      c "KernelSU module $(basename "$z" .zip) installed – reboot the phone"
+    else
+      warn "KernelSU module $(basename "$z" .zip): no root for adb.
+       Either: KernelSU app → Superuser → Shell → allow, then ./noxis.sh postinstall again
+       Or:     KernelSU app → Modules → Install → Download/$(basename "$z")"
+    fi
   done
 }
 
@@ -317,6 +332,41 @@ install_post() {  # <name> <url> – user app, installed via adb after flashing
     rm -f "$POST/$name.apk.part"; warn "$name: download failed – skipped"
   fi
   return 0
+}
+
+install_avdb() {
+  local dir="$NOXIS/vendor/noxis/prebuilt/NoxisAvDb" f
+  c "Virus signatures (ClamAV) for Noxis Guard"
+  if ! python3 "$NOXIS/tools/noxis_avdb.py" "$dir"; then
+    warn "ClamAV signatures not available – Noxis Guard only checks app behaviour"
+    rm -rf "$dir"; return 0
+  fi
+  {
+    for f in android_md5.idx android_sha1.idx android_sha256.idx android.names VERSION; do
+      echo "prebuilt_etc {"
+      echo "    name: \"noxis_av_$f\","
+      echo "    src: \"$f\","
+      echo "    filename: \"$f\","
+      echo "    sub_dir: \"noxis/av\","
+      echo "    product_specific: true,"
+      echo "}"
+    done
+  } > "$dir/Android.bp"
+}
+
+# Root modules (KernelSU) of Noxis: zipped into postinstall/modules/, the
+# phone gets them with ./noxis.sh postinstall.
+build_ksu_modules() {
+  local m name
+  need zip "install zip"
+  mkdir -p "$POST/modules"
+  for m in "$NOXIS"/ksu-modules/*/; do
+    [ -f "$m/module.prop" ] || continue
+    name=$(basename "$m")
+    rm -f "$POST/modules/$name.zip"
+    ( cd "$m" && zip -qr9 "$POST/modules/$name.zip" . )
+    c "KernelSU module $name → installed after flashing (./noxis.sh postinstall)"
+  done
 }
 
 # IronFox: Firefox fork with uBlock Origin preinstalled and hardened defaults,
@@ -561,6 +611,10 @@ cmd_apps() {
   install_post Termux "$(fdroid_apk com.termux || true)"
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false
   install_apk TorBrowser        "$(tor_url)" false
+  # Virus signatures for Noxis Guard (ClamAV, Android malware only)
+  install_avdb
+  # KernelSU modules from ksu-modules/ → installed after flashing
+  build_ksu_modules
   # The manager has to match the KernelSU in the kernel and be officially signed
   local kt; kt=$(ksu_tag)
   if [ "$kt" = main ]; then

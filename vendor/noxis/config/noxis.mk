@@ -20,6 +20,7 @@ PRODUCT_SYSTEM_EXT_PROPERTIES += \
 PRODUCT_PACKAGES += \
     NoxisGuard \
     privapp-permissions-noxis.xml \
+    default-permissions-noxis.xml \
     NoxisFrameworksOverlay \
     NoxisSystemUIOverlay \
     NoxisSetupWizardOverlay \
@@ -47,6 +48,11 @@ PRODUCT_PACKAGES += MullvadVPN
 endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/TorBrowser/TorBrowser.apk),)
 PRODUCT_PACKAGES += TorBrowser
+endif
+# Virus signatures for Noxis Guard (ClamAV, Android malware, /product/etc/noxis/av)
+ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/NoxisAvDb/android.names),)
+PRODUCT_PACKAGES += noxis_av_android_md5.idx noxis_av_android_sha1.idx noxis_av_android_sha256.idx \
+    noxis_av_android.names noxis_av_VERSION
 endif
 # KernelSU-Manager: Root-Freigabe pro App (Kernel-Treiber steckt in kernel/nothing/sm7635/KernelSU)
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/KernelSU/KernelSU.apk),)

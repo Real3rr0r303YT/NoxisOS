@@ -4,3 +4,10 @@ prebuilt_etc {
     sub_dir: "permissions",
     system_ext_specific: true,
 }
+
+prebuilt_etc {
+    name: "default-permissions-noxis.xml",
+    src: "default-permissions-noxis.xml",
+    sub_dir: "default-permissions",
+    system_ext_specific: true,
+}

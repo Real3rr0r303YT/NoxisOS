@@ -76,6 +76,8 @@ ok "apps: Cromite removed from the image" "! grep -qi cromite vendor/noxis/confi
 ok "apps: IronFox is the browser" "grep -q IronFox vendor/noxis/config/noxis.mk && grep -q org.ironfoxoss.ironfox vendor/noxis/overlay/NoxisFrameworksOverlay/res/values/config.xml"
 ok "apps: Termux after flashing" "grep -q 'install_post Termux' noxis.sh"
 ok "apps: F-Droid + Aurora" "grep -q 'install_apk FDroid' noxis.sh && grep -q 'install_apk AuroraStore' noxis.sh && grep -q AuroraStore vendor/noxis/config/noxis.mk"
+ok "guard: virus scan" "[ -f vendor/noxis/packages/NoxisGuard/src/com/noxis/guard/Scanner.java ] && grep -q noxis_av_android_sha256.idx vendor/noxis/config/noxis.mk && grep -q install_avdb noxis.sh"
+ok "ksu modules: NoxisSpoof" "[ -f ksu-modules/NoxisSpoof/module.prop ] && grep -q build_ksu_modules noxis.sh"
 ok "apps: no NoxisLauncher" "! grep -q NoxisLauncher vendor/noxis/config/noxis.mk"
 ok "apps: Android.bp erzeugt" "grep -q 'name: \"GraphenePdfViewer\"' vendor/noxis/prebuilt/GraphenePdfViewer/Android.bp"
 ok "apps: Mullvad + Tor (aarch64, neueste stabile)" "[ -f vendor/noxis/prebuilt/MullvadVPN/MullvadVPN.apk ] && grep -q 'torbrowser/16.0/tor-browser-android-aarch64-16.0.apk' $W/apps.out"

@@ -9,5 +9,10 @@ public class GuardApp extends Application {
         super.onCreate();
         Hardening.applyOnce(this);
         GuardController.get(this).start();
+        try {
+            ScanWatcher.start(this);
+        } catch (RuntimeException e) {
+            android.util.Log.e(GuardController.TAG, "Virenscan-Wächter nicht gestartet", e);
+        }
     }
 }
