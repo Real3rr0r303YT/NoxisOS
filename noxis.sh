@@ -29,7 +29,9 @@ trap 'printf "\033[1;31m[fehler]\033[0m unerwarteter Abbruch in noxis.sh Zeile %
 NOXIS="$(cd "$(dirname "$0")" && pwd)"
 SRC="${NOXIS_SRC:-$HOME/noxis-src}"
 KEYS="${NOXIS_KEYS:-$HOME/.noxis-keys}"
-OUT="${NOXIS_OUT:-$NOXIS/release}"
+# Nicht OUT nennen: envsetup.sh von LineageOS setzt OUT auf out/target/product/...
+# und haette die fertige ROM sonst dorthin umgeleitet (wird danach geloescht).
+REL="${NOXIS_OUT:-$NOXIS/release}"
 BRANCH="lineage-24.0"
 DEVICE="asteroids"
 VARIANT="${NOXIS_VARIANT:-user}"
@@ -643,21 +645,21 @@ cmd_sign() {
   [ -f "$tf" ] || die "Kein target_files.zip – erst ./noxis.sh build"
   c "APEX-Schlüssel erzeugen"
   apex_keys "$tf"
-  mkdir -p "$OUT"
+  mkdir -p "$REL"
   local stamp; stamp=$(date -u +%Y%m%d)
   local name="Noxis-1.0-$stamp-$DEVICE"
   local -a args
   mapfile -t args < <(python3 "$NOXIS/tools/noxis_sign_args.py" "$tf" "$KEYS" args)
   c "Signiere (Apps, APEXe, Verified Boot)"
-  sign_target_files_apks "${args[@]}" "$tf" "$OUT/$name-target_files.zip"
+  sign_target_files_apks "${args[@]}" "$tf" "$REL/$name-target_files.zip"
   c "OTA-Paket"
-  ota_from_target_files -k "$KEYS/releasekey" "$OUT/$name-target_files.zip" "$OUT/$name-ota.zip"
+  ota_from_target_files -k "$KEYS/releasekey" "$REL/$name-target_files.zip" "$REL/$name-ota.zip"
   c "Fastboot-Images"
-  img_from_target_files "$OUT/$name-target_files.zip" "$OUT/$name-img.zip"
-  ( cd "$OUT" && sha256sum "$name-ota.zip" "$name-img.zip" > "$name.sha256" )
-  write_ota_json "$OUT/$name-ota.zip" "noxis-$stamp" > "$OUT/$DEVICE.json"
-  c "Fertig in $OUT:"
-  ls -1 "$OUT" | sed 's,^,  ,'
+  img_from_target_files "$REL/$name-target_files.zip" "$REL/$name-img.zip"
+  ( cd "$REL" && sha256sum "$name-ota.zip" "$name-img.zip" > "$name.sha256" )
+  write_ota_json "$REL/$name-ota.zip" "noxis-$stamp" > "$REL/$DEVICE.json"
+  c "Fertig in $REL:"
+  ls -1 "$REL" | sed 's,^,  ,'
   cmd_cleanup
 }
 
@@ -696,7 +698,7 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
   need unzip "unzip installieren"
   local ota desk tag json
   desk="$(desktop_dir)"
-  ota=$(ls -t "$desk"/Noxis-*-"$DEVICE"-ota.zip "$OUT"/Noxis-*-"$DEVICE"-ota.zip 2>/dev/null | head -n1 || true)
+  ota=$(ls -t "$desk"/Noxis-*-"$DEVICE"-ota.zip "$REL"/Noxis-*-"$DEVICE"-ota.zip 2>/dev/null | head -n1 || true)
   [ -f "$ota" ] || die "Keine signierte OTA gefunden – erst ./noxis.sh sign"
   [ "$(stat -c %s "$ota")" -lt 2147483648 ] || die "OTA größer als 2 GiB – GitHub-Releases erlauben max. 2 GiB pro Datei"
   unzip -tq "$ota" >/dev/null || die "OTA-Zip beschädigt: $ota"
@@ -729,11 +731,13 @@ desktop_dir() {
 cmd_cleanup() {
   local ota img desk
   ota=$(latest ota.zip); img=$(latest img.zip)
-  [ -f "$ota" ] && [ -f "$img" ] || die "Keine fertige ROM in $OUT – out/ wird NICHT gelöscht"
+  [ -f "$ota" ] && [ -f "$img" ] || die "Keine fertige ROM in $REL – out/ wird NICHT gelöscht"
   desk=$(desktop_dir); mkdir -p "$desk"
   c "ROM → $desk"
-  cp -f "$ota" "$img" "$desk/"
   local f
+  for f in "$ota" "$img"; do
+    [ "$(dirname "$f")" = "$desk" ] || cp -f "$f" "$desk/"
+  done
   for f in "$ota" "$img"; do
     [ "$(sha256sum < "$f")" = "$(sha256sum < "$desk/$(basename "$f")")" ] \
       || die "Kopie von $(basename "$f") fehlerhaft – out/ wird NICHT gelöscht"
@@ -747,12 +751,12 @@ cmd_cleanup() {
   c "Lösche $o ($(du -sh "$o" 2>/dev/null | cut -f1))"
   rm -rf -- "$o"
   # signiertes target_files nur für Delta-OTAs nötig – Platz sparen
-  rm -f -- "$OUT"/Noxis-*-target_files.zip
+  rm -f -- "$REL"/Noxis-*-target_files.zip
   c "Belegt jetzt: $(du -sh "$SRC" 2>/dev/null | cut -f1) Quellcode, ccache $(du -sh "${CCACHE_DIR:-$HOME/.cache/ccache}" 2>/dev/null | cut -f1)"
 }
 
 # ------------------------------------------------------------ flash
-latest() { ls -t "$OUT"/Noxis-*-"$1" 2>/dev/null | head -1 || true; }
+latest() { ls -t "$REL"/Noxis-*-"$1" "$(desktop_dir)"/Noxis-*-"$1" 2>/dev/null | head -1 || true; }
 
 cmd_flash() {
   need fastboot "android-tools installieren"
