@@ -18,7 +18,7 @@
 #  ./noxis.sh eta                How long the running build still needs (2nd terminal)
 #  ./noxis.sh overlayfix [Name]  Changed overlays onto the phone as KernelSU module, no build
 #  ./noxis.sh opsec              Check the built image against the OPSEC rules
-#  ./noxis.sh sign               Sign → OTA + images → Desktop, delete out/
+#  ./noxis.sh sign               Sign → OTA + images → Desktop (out/ stays)
 #  ./noxis.sh cleanup            ROM to the Desktop (NOXIS_KEEP_OUT=0 also deletes out/)
 #  ./noxis.sh flash              Install on the phone (guided, bootloader stays unlocked)
 #  ./noxis.sh postinstall        After the first boot: Termux/Tor/... via adb
