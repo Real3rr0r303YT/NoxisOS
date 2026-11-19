@@ -990,6 +990,40 @@ Checksums: SHA256SUMS. Made by 3rr0r303YT on TikTok – GPL-3.0.
 EOF
 }
 
+bytes_of() { local t=0 f; for f in "$@"; do t=$((t + $(stat -c %s "$f"))); done; echo "$t"; }
+
+# gh with upload progress: gh runs in the background, every 15 s it shows how
+# much it has sent (bytes the gh process wrote, from /proc/<pid>/io), the
+# speed and the time left. Same exit code as gh.
+gh_upload() {  # <total bytes> <gh args...>
+  local total="$1" pid mon rc=0; shift
+  gh "$@" & pid=$!
+  upload_progress "$total" "$pid" & mon=$!
+  wait "$pid" || rc=$?
+  kill "$mon" 2>/dev/null || true; wait "$mon" 2>/dev/null || true
+  return "$rc"
+}
+
+upload_progress() {  # <total bytes> <pid>
+  local total="$1" pid="$2" t0 el sent rate left
+  [ "$total" -gt 0 ] && [ -r "/proc/$pid/io" ] || return 0
+  t0=$(date +%s)
+  while sleep "${NOXIS_UPLOAD_EVERY:-15}" && kill -0 "$pid" 2>/dev/null; do
+    sent=$(awk '/^wchar:/ {print $2}' "/proc/$pid/io" 2>/dev/null) || return 0
+    [ -n "$sent" ] || return 0
+    [ "$sent" -le "$total" ] || sent=$total
+    el=$(( $(date +%s) - t0 )); [ "$el" -gt 0 ] || el=1
+    rate=$(( sent / el ))
+    if [ "$rate" -gt 0 ]; then
+      left=$(( (total - sent) / rate ))
+      c "$(printf 'Upload: %d%% · %s/%s · %s/s · ~%dm%02ds left (done ~%s)' \
+        $(( sent * 100 / total )) "$(numfmt --to=iec "$sent")" "$(numfmt --to=iec "$total")" \
+        "$(numfmt --to=iec "$rate")" $(( left / 60 )) $(( left % 60 )) \
+        "$(date -d "@$(( $(date +%s) + left ))" +%H:%M)")"
+    fi
+  done
+}
+
 cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (read by the phone's Updater)
   need gh "install the GitHub CLI and run 'gh auth login'"
   need unzip "install unzip"
@@ -1053,10 +1087,11 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
       [ "$(basename "$f")" = SHA256SUMS ] || ! grep -qxF "$(basename "$f")" <<<"$have" || continue
       missing+=("$f")
     done
-    [ ${#missing[@]} = 0 ] || gh release upload "$tag" "${missing[@]}" -R "$NOXIS_GH_REPO" --clobber
-    gh release edit "$tag" -R "$NOXIS_GH_REPO" --notes "$(release_notes "$(basename "$img")")" >/dev/null
+    [ ${#missing[@]} = 0 ] || gh_upload "$(bytes_of "${missing[@]}")" release upload "$tag" "${missing[@]}" -R "$NOXIS_GH_REPO" --clobber
+    # --draft=false: an interrupted "gh release create" leaves a draft behind
+    gh release edit "$tag" -R "$NOXIS_GH_REPO" --draft=false --notes "$(release_notes "$(basename "$img")")" >/dev/null
   else
-    gh release create "$tag" "${files[@]}" -R "$NOXIS_GH_REPO" \
+    gh_upload "$(bytes_of "${files[@]}")" release create "$tag" "${files[@]}" -R "$NOXIS_GH_REPO" \
       --title "Noxis OS $(basename "$ota" | sed -n 's/^Noxis-\([0-9.]*\)-\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)-.*/\1 (\4.\3.\2)/p')" \
       --notes "$(release_notes "$(basename "$img")")"
   fi
