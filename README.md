@@ -158,6 +158,8 @@ Full Nothing OS OTAs for the blobs: <https://github.com/spike0en/nothing_archive
 
 ### Own apps (Nothing design)
 
+The apps are built into the image the same way their KernelSU modules install them (the phone app as privileged app) – so on Noxis you do **not** need those modules; installing them too would put every app on the phone twice. The modules are for Nothing OS and other ROMs.
+
 Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitHub Action (every Monday or on demand) and published as the rolling release `noxis-apps` with `SHA256SUMS` and the source commit of each APK. `./noxis.sh apps` downloads them and checks every checksum; `./noxis.sh sign` re-signs them with your keys.
 
 | App | Repository | Replaces |
@@ -166,7 +168,7 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 | Clock (alarm, timer, stopwatch) | [NothingClock](https://github.com/Real3rr0r303YT/NothingClock) | DeskClock |
 | Calculator | [Calculator](https://github.com/Real3rr0r303YT/Calculator) | ExactCalculator |
 | Notes | [NothingNotes](https://github.com/Real3rr0r303YT/NothingNotes) | – (added) |
-| Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added; set it as default phone app – the stock dialer stays for emergency calls) |
+| Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added as privileged app like its KernelSU module, so two-sided call recording works; set it as default phone app – the stock dialer stays for emergency calls) |
 | Battery | [NothingBattery](https://github.com/Real3rr0r303YT/NothingBattery) | – (added) |
 | Camera | [NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera) | LineageOS camera (Aperture) – offline, metadata stripped, encrypted vault |
 

@@ -11,3 +11,10 @@ prebuilt_etc {
     sub_dir: "default-permissions",
     system_ext_specific: true,
 }
+
+prebuilt_etc {
+    name: "privapp-permissions-noxis-product.xml",
+    src: "privapp-permissions-noxis-product.xml",
+    sub_dir: "permissions",
+    product_specific: true,
+}

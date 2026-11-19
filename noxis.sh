@@ -559,6 +559,10 @@ cmd_ksu() {
 # ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
 # name → LineageOS app it replaces (empty = added next to the stock app)
 NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
+# Privileged own apps (their privileged permissions are allowlisted in
+# vendor/noxis/permissions/privapp-permissions-noxis-product.xml) - the same
+# as the priv-app KernelSU module of the app's repository.
+NOXIS_PRIV_APPS="NoxisCall"
 NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery: NoxisCamera:Aperture"
 
 install_own_apps() {
@@ -587,6 +591,7 @@ install_own_apps() {
       echo "    // test key while building, replaced by the Noxis key when signing (noxis.sh sign)"
       echo "    default_dev_cert: true,"
       echo "    product_specific: true,"
+      case " $NOXIS_PRIV_APPS " in *" $name "*) echo "    privileged: true," ;; esac
       [ -n "$over" ] && echo "    overrides: [\"$over\"],"
       echo "    dex_preopt: {"
       echo "        enabled: false,"

@@ -20,6 +20,7 @@ PRODUCT_SYSTEM_EXT_PROPERTIES += \
 PRODUCT_PACKAGES += \
     NoxisGuard \
     privapp-permissions-noxis.xml \
+    privapp-permissions-noxis-product.xml \
     default-permissions-noxis.xml \
     NoxisFrameworksOverlay \
     NoxisSystemUIOverlay \

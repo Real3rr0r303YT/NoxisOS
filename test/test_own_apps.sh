@@ -32,6 +32,11 @@ grep -q 'overrides: \["DeskClock"\]' "$P/NoxisClock/Android.bp" && ok "clock rep
 grep -q 'overrides: \["ExactCalculator"\]' "$P/NoxisCalculator/Android.bp" && ok "calculator replaces ExactCalculator" || bad "calculator override"
 grep -q 'overrides: \["Aperture"\]' "$P/NoxisCamera/Android.bp" && ok "camera replaces LineageOS Aperture" || bad "Aperture override"
 ! grep -q overrides "$P/NoxisCall/Android.bp" && ok "phone app added, stock Dialer kept (emergency calls)" || bad "dialer overridden"
+grep -q "privileged: true" "$P/NoxisCall/Android.bp" && ! grep -q privileged "$P/NoxisNotes/Android.bp" && ok "phone app privileged (two-sided call recording), others not" || bad "privileged"
+X="$ROOT/vendor/noxis/permissions/privapp-permissions-noxis-product.xml"
+python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse(sys.argv[1])" "$X" && grep -q 'package="com.real3rr0r303yt.nothingcall"' "$X" && grep -q CAPTURE_AUDIO_OUTPUT "$X" \
+  && grep -q "privapp-permissions-noxis-product.xml" "$ROOT/vendor/noxis/config/noxis.mk" && grep -B3 -A3 'privapp-permissions-noxis-product.xml",' "$ROOT/vendor/noxis/permissions/Android.bp" | grep -q product_specific \
+  && ok "privapp allowlist for the phone app on /product" || bad "privapp allowlist"
 grep -q "default_dev_cert: true" "$P/NoxisNotes/Android.bp" && ok "apps re-signed with the ROM key" || bad "presigned"
 grep -q "0123abcd" "$P/NoxisNotes/SOURCE" && ok "source commit recorded" || bad "SOURCE"
 python3 - "$P" <<'PY' && ok "Android.bp files well-formed" || bad "Android.bp syntax"

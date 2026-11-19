@@ -4,6 +4,7 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 
 ## 1.3
 
+- **NoxisCall is a privileged system app** (like the NothingCall KernelSU module): two-sided call recording works without the module.
 - **postinstall:** after a fresh install or factory reset it opens the KernelSU app and waits until you allowed root for Shell, then installs the KernelSU modules (before, they were skipped with a warning).
 - **Setup wizard:** the welcome animation shows the Noxis mark instead of the LineageOS logo (it is a Lottie animation, `raw/lottie_welcome`, not the `logo` drawable – `tools/gen_setup_lottie.py`).
 - **NoxisCamera** ([NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera)) joins the GrapheneOS Camera: offline, metadata stripped, encrypted vault, zoom up to 40x. The LineageOS camera (Aperture) is removed.
