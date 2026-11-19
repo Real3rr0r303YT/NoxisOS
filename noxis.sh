@@ -1057,7 +1057,7 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
     gh release edit "$tag" -R "$NOXIS_GH_REPO" --notes "$(release_notes "$(basename "$img")")" >/dev/null
   else
     gh release create "$tag" "${files[@]}" -R "$NOXIS_GH_REPO" \
-      --title "Noxis OS $(basename "$ota" | sed -n 's/^Noxis-\([0-9.]*\)-.*/\1/p') (${tag#noxis-})" \
+      --title "Noxis OS $(basename "$ota" | sed -n 's/^Noxis-\([0-9.]*\)-\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)-.*/\1 (\4.\3.\2)/p')" \
       --notes "$(release_notes "$(basename "$img")")"
   fi
   rm -rf -- "$stage"
