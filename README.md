@@ -248,6 +248,8 @@ while true; do if [ "$(adb get-state 2>/dev/null)" = device ]; then adb logcat -
 
 ## Known issues
 
+* **Restart with the USB cable plugged in ended in the black charging screen** (phone looked switched off). `noxis-charger.rc` leaves charger mode once when the boot reason is a restart. If the bootloader still insists, the phone stays charging – press power to start.
+
 * **Verified boot is switched off when flashing.** With verification on, `init` aborts during boot and the phone drops back to the bootloader. Until the cause is found, `vbmeta` is flashed with `--disable-verity --disable-verification`. The images are still signed with your own keys.
 * **Missing privileged permissions = boot loop.** Since Android 17 `SCHEDULE_EXACT_ALARM` is `signature|privileged`; Noxis Guard asked for it without it being on the allowlist, and `system_server` crashed at every boot. Fixed, and `./noxis.sh build` now compares every privileged permission of our priv-apps with `vendor/noxis/permissions/*.xml` **before** building (`tools/noxis_privapp_check.py`).
 * **Firmware/blob version:** the device tree expects Nothing OS B4.1-260928-1204. Blobs from another version build fine with `NOXIS_OTHER_FIRMWARE=1`, but camera, modem or fingerprint may misbehave.

@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Noxis OS – Copyright (C) 2026 3rr0r (Real3rr0r303YT) – Made by 3rr0r303YT on TikTok
+#
+# A restart with the USB cable plugged in lands in the (black) charging screen
+# instead of Android: the Nothing bootloader picks charger mode because a
+# cable is present. When the boot reason says the phone was *restarted*
+# (not switched off and plugged in), leave charger mode and restart once
+# more with our own reason. That reason matches none of these triggers, so
+# there is never more than one extra restart – if the bootloader chooses
+# charger mode again, the phone simply stays there and charges.
+
+on charger && property:ro.boot.bootreason=reboot
+    setprop sys.powerctl reboot,noxis_charger
+
+on charger && property:ro.boot.bootreason=reboot,shell
+    setprop sys.powerctl reboot,noxis_charger
+
+on charger && property:ro.boot.bootreason=reboot,userrequested
+    setprop sys.powerctl reboot,noxis_charger
+
+on charger && property:ro.boot.bootreason=reboot,ota
+    setprop sys.powerctl reboot,noxis_charger
+
+on charger && property:ro.boot.bootreason=reboot,recovery
+    setprop sys.powerctl reboot,noxis_charger
+
+on charger && property:ro.boot.bootreason=reboot,adb
+    setprop sys.powerctl reboot,noxis_charger

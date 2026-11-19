@@ -84,3 +84,7 @@ PRODUCT_SYSTEM_PROPERTIES += \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb
 endif
+
+# Restart with the cable plugged in: boot Android instead of the black charging screen
+PRODUCT_COPY_FILES += \
+    vendor/noxis/config/init/noxis-charger.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/noxis-charger.rc
