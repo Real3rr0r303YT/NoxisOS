@@ -63,6 +63,22 @@ def alive(pid):
 
 
 ANALYSIS_MAX = 5000
+BUILD_TOOLS = ("soong_ui", "soong_build", "siso", "ninja", "kati")
+
+
+def building():
+    """True while a soong_ui/siso/ninja/kati process of the build is running."""
+    for d in os.listdir("/proc"):
+        if not d.isdigit():
+            continue
+        try:
+            with open(f"/proc/{d}/cmdline", "rb") as f:
+                exe = os.path.basename(f.read().split(b"\0", 1)[0].decode(errors="ignore"))
+        except OSError:
+            continue
+        if exe.startswith(BUILD_TOOLS):
+            return True
+    return False
 
 
 def main():
@@ -75,6 +91,14 @@ def main():
     once = "--once" in a
     hist, said_wait = [], False
     while alive(pid):
+        if not pid and not building():
+            p = read(path)
+            if p and p[0] > ANALYSIS_MAX and p[1] >= p[0]:
+                print("[noxis] ETA: no build running – the last build finished "
+                      f"({p[1]}/{p[0]} steps). Next: ./noxis.sh sign / publish", flush=True)
+            else:
+                print("[noxis] ETA: no build running", flush=True)
+            return
         p = read(path)
         now = time.time()
         # Soong's bootstrap/analysis shows up as small jobs (1/2, 295/296 ...) - that is
