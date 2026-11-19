@@ -878,6 +878,10 @@ cmd_opsec() {
 }
 
 # ------------------------------------------------------------ sign
+noxis_version() {  # single source: vendor/noxis/config/noxis.mk
+  sed -n 's/^NOXIS_VERSION := //p' "$NOXIS/vendor/noxis/config/noxis.mk" | head -n1
+}
+
 cmd_sign() {
   [ -f "$KEYS/releasekey.pk8" ] || die "Run ./noxis.sh keys first"
   envsetup
@@ -889,7 +893,7 @@ cmd_sign() {
   apex_keys "$tf"
   mkdir -p "$REL"
   local stamp; stamp=$(date -u +%Y%m%d)
-  local name="Noxis-1.0-$stamp-$DEVICE"
+  local name="Noxis-$(noxis_version)-$stamp-$DEVICE"
   local -a args
   mapfile -t args < <(python3 "$NOXIS/tools/noxis_sign_args.py" "$tf" "$KEYS" args)
   c "Signing (apps, APEXes, verified boot)"
@@ -1042,7 +1046,7 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
     gh release edit "$tag" -R "$NOXIS_GH_REPO" --notes "$(release_notes "$(basename "$img")")" >/dev/null
   else
     gh release create "$tag" "${files[@]}" -R "$NOXIS_GH_REPO" \
-      --title "Noxis OS ${tag#noxis-}" \
+      --title "Noxis OS $(basename "$ota" | sed -n 's/^Noxis-\([0-9.]*\)-.*/\1/p') (${tag#noxis-})" \
       --notes "$(release_notes "$(basename "$img")")"
   fi
   rm -rf -- "$stage"

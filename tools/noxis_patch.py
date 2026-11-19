@@ -117,8 +117,11 @@ def p_version():
     # "NoxisOS version" (otherwise "24.0-DATE-UNOFFICIAL-asteroids").
     f = "vendor/lineage/config/version.mk"
     s = read(f)
-    if "LINEAGE_DISPLAY_VERSION := Noxis-" in s and "LINEAGE_VERSION := Noxis-" in s:
-        return ok("Version name \"Noxis\"", "already done")
+    m = re.search(r"^NOXIS_VERSION := (\S+)", read("vendor/noxis/config/noxis.mk"), re.M)
+    ver = m.group(1) if m else "1.0"
+    if ("LINEAGE_DISPLAY_VERSION := Noxis-" in s and "LINEAGE_VERSION := Noxis-" in s
+            and f"NOXIS_VERSION ?= {ver}\n" in s):
+        return ok(f"Version name \"Noxis {ver}\"", "already done")
     new = s
     if "LINEAGE_DISPLAY_VERSION := Noxis-" not in new:
         new, n = re.subn(r"^LINEAGE_DISPLAY_VERSION := .*$",
@@ -130,10 +133,13 @@ def p_version():
                          r"\1LINEAGE_VERSION := Noxis-$(NOXIS_VERSION)-$(LINEAGE_BUILD_DATE)-$(LINEAGE_BUILD)", new, flags=re.M)
         if n < 1:
             return fail("Version name \"Noxis\"", "LINEAGE_VERSION not found")
-    if "NOXIS_VERSION ?=" not in new:
-        new = new.replace("PRODUCT_VERSION_MAJOR = ", "NOXIS_VERSION ?= 1.0\nPRODUCT_VERSION_MAJOR = ", 1)
+    # version.mk may be read before noxis.mk, so it carries the same number
+    if re.search(r"^NOXIS_VERSION \?= ", new, re.M):
+        new = re.sub(r"^NOXIS_VERSION \?= .*$", f"NOXIS_VERSION ?= {ver}", new, flags=re.M)
+    else:
+        new = new.replace("PRODUCT_VERSION_MAJOR = ", f"NOXIS_VERSION ?= {ver}\nPRODUCT_VERSION_MAJOR = ", 1)
     write(f, new)
-    ok("Version name \"Noxis\"", "patched")
+    ok(f"Version name \"Noxis {ver}\"", "patched")
 
 
 # ------------------------------------------------------------ 6. Jelly raus, eigener Browser rein
@@ -281,7 +287,59 @@ def p_openeuicc():
     ok("OpenEUICC manifests", "patched" if geaendert else "already done")
 
 
-for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc):
+# ------------------------------------------------------------ Recovery: Noxis logo + version
+def p_recovery():
+    """LineageOS recovery: Noxis logos (vendor/noxis/branding/recovery) and
+    "NoxisOS 1.1 (DATE)" in the title instead of "Version 24.0 (DATE)"."""
+    name = "Recovery branding (logo, NoxisOS version)"
+    rec = "bootable/recovery"
+    if not os.path.isdir(path(rec)):
+        return ok(name, "skipped (no bootable/recovery)")
+    changed = False
+    src_dir = path("vendor/noxis/branding/recovery")
+    for root, _, files in os.walk(src_dir):
+        for fn in files:
+            rel = os.path.relpath(os.path.join(root, fn), src_dir)
+            dst = path(os.path.join(rec, rel))
+            if not os.path.isdir(os.path.dirname(dst)):
+                continue
+            new = open(os.path.join(root, fn), "rb").read()
+            if not os.path.exists(dst) or open(dst, "rb").read() != new:
+                if not CHECK:
+                    with open(dst, "wb") as fh:
+                        fh.write(new)
+                changed = True
+    f = f"{rec}/recovery.cpp"
+    s = read(f)
+    old = '"Version " + android::base::GetProperty("ro.lineage.build.version", "(unknown)") +'
+    new = ('"NoxisOS " + (android::base::StartsWith(ver, "Noxis-") ? '
+           'ver.substr(6, ver.find(\'-\', 6) - 6) : '
+           'android::base::GetProperty("ro.lineage.build.version", "(unknown)")) +')
+    if old in s:
+        write(f, s.replace(old, new, 1))
+        changed = True
+    elif new not in s:
+        return fail(name, "title line in recovery.cpp not found")
+    ok(name, "patched" if changed else "already done")
+
+
+# ------------------------------------------------------------ Easter egg: Noxis instead of LineageOS
+def p_easteregg():
+    """Settings → About phone → tap the NoxisOS version: LineageParts' egg
+    (colourful LineageOS logo) becomes the Noxis dot-matrix egg."""
+    name = "Easter egg (Noxis instead of LineageOS)"
+    dst = "packages/apps/LineageParts/src/org/lineageos/lineageparts/logo/PlatLogoActivity.java"
+    if not os.path.exists(path(dst)):
+        return ok(name, "skipped (LineageParts not found)")
+    new = read("vendor/noxis/patches/LineageParts/PlatLogoActivity.java")
+    if read(dst) == new:
+        return ok(name, "already done")
+    write(dst, new)
+    ok(name, "patched")
+
+
+for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc,
+          p_recovery, p_easteregg):
     try:
         p()
     except FileNotFoundError as e:

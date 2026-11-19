@@ -59,6 +59,8 @@ Note: this is about *apps*, not the bootloader. Unlocking depends on the phone m
 
 ## Download & install
 
+What changed: [CHANGELOG.md](CHANGELOG.md)
+
 Every release has everything you need: <https://github.com/Real3rr0r303YT/NoxisOS/releases/latest>
 
 | File | What for |
@@ -273,11 +275,13 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 | Kernel hardening | `vendor/noxis/config/BoardConfigNoxis.mk` | `init_on_alloc=1 init_on_free=1 page_alloc.shuffle=1 slab_nomerge randomize_kstack_offset=on` |
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
-| Name | `vendor/lineage/config/version.mk` | "Noxis-1.0-DATE" in Settings |
+| Name | `vendor/lineage/config/version.mk` | "Noxis-1.1-DATE" in Settings (number from `NOXIS_VERSION` in `noxis.mk`) |
 | Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS" with the Noxis logo |
 | About phone | `version.mk` + `NoxisLineageSdkOverlay` | "NoxisOS version" instead of "LineageOS version" |
 | System updates | `NoxisUpdaterOverlay` | NoxisOS name, Noxis mark and colours on the updater card, links to GitHub |
 | Browser | `vendor/lineage/config/common.mk` | Jelly out, IronFox as default browser |
+| Recovery | `bootable/recovery` | Noxis logo and "NoxisOS 1.1 (DATE)" instead of the LineageOS logo and "Version 24.0" |
+| Easter egg | `LineageParts` `PlatLogoActivity` | tap the NoxisOS version: Noxis dot-matrix egg – waves on every touch, a message after 7 taps, long press for the credit |
 | Restart with cable | `vendor/noxis/config/init/noxis-charger.rc` | boots Android instead of the black charging screen after a restart |
 
 ---
