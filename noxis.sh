@@ -896,6 +896,12 @@ cmd_sign() {
   local name="Noxis-$(noxis_version)-$stamp-$DEVICE"
   local -a args
   mapfile -t args < <(python3 "$NOXIS/tools/noxis_sign_args.py" "$tf" "$KEYS" args)
+  # The OTA also rewrites vbmeta. Built with verification on, init aborts on
+  # boot (README "Known issues") and the phone falls back to the old slot.
+  # So the vbmeta in OTA + images carries the same flags as the first flash
+  # (--disable-verity --disable-verification = --flags 3). Images stay signed.
+  # NOXIS_VERIFIED_BOOT=1 leaves verification on (only once the cause is fixed).
+  [ "${NOXIS_VERIFIED_BOOT:-0}" = 1 ] || args+=(--avb_vbmeta_extra_args "--flags 3")
   c "Signing (apps, APEXes, verified boot)"
   sign_target_files_apks "${args[@]}" "$tf" "$REL/$name-target_files.zip"
   c "OTA package"

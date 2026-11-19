@@ -319,7 +319,7 @@ Stuck for more than 15 minutes: hold **Volume down + Power** for 15 s → fastbo
 
 ## Known issues
 
-* **Verified boot is switched off when flashing.** With verification on, `init` aborts during boot. Until the cause is found, `vbmeta` is flashed with `--disable-verity --disable-verification`. The images are still signed with your own keys.
+* **Verified boot is switched off.** With verification on, `init` aborts during boot. Until the cause is found, `vbmeta` is flashed with `--disable-verity --disable-verification`, and `./noxis.sh sign` builds the vbmeta inside the OTA the same way (`--flags 3`), so updates boot too. The images are still signed with your own keys. Because of this the bootloader must stay **unlocked** – never run `fastboot flashing lock`.
 * **Restart with the USB cable plugged in** used to end in the black charging screen. `noxis-charger.rc` leaves charger mode once after a restart; if the bootloader insists, the phone stays charging – press power.
 * **Missing privileged permissions = boot loop.** `./noxis.sh build` compares every privileged permission of our priv-apps with `vendor/noxis/permissions/*.xml` **before** building.
 * **Firmware/blob version:** the device tree expects Nothing OS B4.1-260928-1204. Blobs from another version build with `NOXIS_OTHER_FIRMWARE=1`, but camera, modem or fingerprint may misbehave.
