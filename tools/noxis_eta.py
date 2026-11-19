@@ -111,4 +111,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:   # Ctrl+C only stops the display, not the build
+        print()
