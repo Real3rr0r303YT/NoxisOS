@@ -16,6 +16,7 @@
 #  ./noxis.sh keys               Create your own signing keys
 #  ./noxis.sh build              Compile (user build, KernelSU in the kernel)
 #  ./noxis.sh eta                How long the running build still needs (2nd terminal)
+#  ./noxis.sh overlayfix [Name]  Changed overlays onto the phone as KernelSU module, no build
 #  ./noxis.sh opsec              Check the built image against the OPSEC rules
 #  ./noxis.sh sign               Sign → OTA + images → Desktop, delete out/
 #  ./noxis.sh cleanup            ROM to the Desktop (NOXIS_KEEP_OUT=0 also deletes out/)
@@ -1399,6 +1400,7 @@ case "${1:-}" in
   flash)  cmd_flash ;;
   postinstall|nachinstall) cmd_postinstall ;;
   ksu)    cmd_ksu ;;
+  overlayfix) shift; bash "$NOXIS/tools/noxis_rro_hotfix.sh" "$NOXIS" "$SRC" "$KEYS" "$@" ;;
   eta)    python3 "$NOXIS/tools/noxis_eta.py" "$SRC/out" --every 30 ;;
   direct|direkt) cmd_direct ;;
   sysextfix) cmd_sysextfix ;;
@@ -1406,5 +1408,5 @@ case "${1:-}" in
   publish) cmd_publish ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '5,31p' "$0" ;;
+  *) sed -n '5,32p' "$0" ;;
 esac
