@@ -4,7 +4,7 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 
 ## 1.3 (next)
 
-- **NoxisCamera** ([NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera)) is the system camera: offline, metadata stripped, encrypted vault, zoom up to 40x. Replaces the GrapheneOS Camera.
+- **NoxisCamera** ([NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera)) joins the GrapheneOS Camera: offline, metadata stripped, encrypted vault, zoom up to 40x. The LineageOS camera (Aperture) is removed.
 
 ## 1.2
 

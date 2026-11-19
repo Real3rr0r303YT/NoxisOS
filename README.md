@@ -168,7 +168,7 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 | Notes | [NothingNotes](https://github.com/Real3rr0r303YT/NothingNotes) | – (added) |
 | Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added; set it as default phone app – the stock dialer stays for emergency calls) |
 | Battery | [NothingBattery](https://github.com/Real3rr0r303YT/NothingBattery) | – (added) |
-| Camera | [NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera) | GrapheneOS Camera (offline, metadata stripped, encrypted vault) |
+| Camera | [NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera) | LineageOS camera (Aperture) – offline, metadata stripped, encrypted vault |
 
 ### Extra apps
 
@@ -180,7 +180,7 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 | **Mullvad VPN** | [mullvad.net](https://mullvad.net) | always-on + killswitch |
 | **Tor Browser** | [torproject.org](https://www.torproject.org) | after the first boot (`postinstall`) |
 | **Termux** | [F-Droid](https://f-droid.org/packages/com.termux/) | terminal with packages (`pkg install …`) – after the first boot, normal updatable app |
-| GrapheneOS PDF Viewer | [GrapheneOS](https://github.com/GrapheneOS) | in the image, no network access |
+| GrapheneOS Camera + PDF Viewer | [GrapheneOS](https://github.com/GrapheneOS) | in the image, no network access |
 | Your own APKs (e.g. ZArchiver) | you | put the `.apk` (arm64-v8a!) into `postinstall/` – `./noxis.sh postinstall` installs it too |
 
 **Home screen:** LineageOS' launcher (Trebuchet) – clean, with icon packs, grid size, hidden apps and themed icons. Want the One UI look? Install a One UI Home module in the KernelSU app yourself (e.g. [reiryuki/One-UI-Home-35-Magisk-Module](https://github.com/reiryuki/One-UI-Home-35-Magisk-Module)). Samsung's launcher is proprietary, so Noxis does not ship it, and those modules are made for older Android versions – it may not start on Android 17.

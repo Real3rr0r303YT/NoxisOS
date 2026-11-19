@@ -30,6 +30,7 @@ done
 grep -q 'overrides: \["Etar"\]' "$P/NoxisCalendar/Android.bp" && ok "calendar replaces Etar" || bad "Etar override"
 grep -q 'overrides: \["DeskClock"\]' "$P/NoxisClock/Android.bp" && ok "clock replaces DeskClock" || bad "DeskClock override"
 grep -q 'overrides: \["ExactCalculator"\]' "$P/NoxisCalculator/Android.bp" && ok "calculator replaces ExactCalculator" || bad "calculator override"
+grep -q 'overrides: \["Aperture"\]' "$P/NoxisCamera/Android.bp" && ok "camera replaces LineageOS Aperture" || bad "Aperture override"
 ! grep -q overrides "$P/NoxisCall/Android.bp" && ok "phone app added, stock Dialer kept (emergency calls)" || bad "dialer overridden"
 grep -q "default_dev_cert: true" "$P/NoxisNotes/Android.bp" && ok "apps re-signed with the ROM key" || bad "presigned"
 grep -q "0123abcd" "$P/NoxisNotes/SOURCE" && ok "source commit recorded" || bad "SOURCE"

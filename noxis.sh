@@ -386,8 +386,8 @@ print(max(p, key=lambda x: x["versionCode"])["apkName"] if p else "")' <<<"$idx"
   install_apk IronFox "$IRONFOX_REPO/$apk" false
 }
 
-install_apk() {  # <name> <url> <privileged:true|false>
-  local name="$1" url="$2" priv="$3" dir
+install_apk() {  # <name> <url> <privileged:true|false> [module it replaces]
+  local name="$1" url="$2" priv="$3" over="${4:-}" dir
   dir="$NOXIS/vendor/noxis/prebuilt/$name"
   [ -n "$url" ] || { warn "$name: no download address found – skipped"; return 0; }
   mkdir -p "$dir"
@@ -399,11 +399,12 @@ install_apk() {  # <name> <url> <privileged:true|false>
     return 0
   fi
   mv "$dir/$name.apk.part" "$dir/$name.apk"
-  install_apk_bp "$name" "$priv"
+  install_apk_bp "$name" "$priv" "$over"
 }
 
-install_apk_bp() {  # <name> <privileged> – Android.bp for an already downloaded APK
-  local name="$1" priv="$2" dir="$NOXIS/vendor/noxis/prebuilt/$1"
+install_apk_bp() {  # <name> <privileged> [replaces] – Android.bp for an already downloaded APK
+  local name="$1" priv="$2" over="${3:-}" dir="$NOXIS/vendor/noxis/prebuilt/$1" ov=""
+  [ -n "$over" ] && ov=$'\n'"    overrides: [\"$over\"],"
   cat > "$dir/Android.bp" <<EOF
 android_app_import {
     name: "$name",
@@ -412,7 +413,7 @@ android_app_import {
     // the v2/v3 signature only survives if Soong does not touch the APK
     preprocessed: true,
     product_specific: true,
-    privileged: $priv,
+    privileged: $priv,$ov
     dex_preopt: {
         enabled: false,
     },
@@ -543,7 +544,7 @@ cmd_ksu() {
 # ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
 # name → LineageOS app it replaces (empty = added next to the stock app)
 NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
-NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery: NoxisCamera:"
+NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery: NoxisCamera:Aperture"
 
 install_own_apps() {
   local base="${NOXIS_APPS_URL:-https://github.com/$NOXIS_APPS_REPO/releases/download/noxis-apps}" tmp entry name over dir
@@ -585,7 +586,7 @@ install_own_apps() {
 # Apps that Noxis no longer ships: remove leftovers of earlier runs, otherwise
 # the old prebuilt in the source tree (cmd_vendor keeps prebuilt/) would still
 # end up in the image.
-NOXIS_DROPPED_APPS="Cromite NoxisLauncher Fennec NoxisPacker GrapheneCamera"
+NOXIS_DROPPED_APPS="Cromite NoxisLauncher Fennec NoxisPacker"
 drop_old_apps() {
   local n
   for n in $NOXIS_DROPPED_APPS; do
@@ -600,7 +601,9 @@ cmd_apps() {
   need curl "install curl"
   drop_old_apps
   install_own_apps
-  # Camera: 3rr0r's NothingCamera (NoxisCamera, built above) replaces the GrapheneOS camera
+  # Cameras: GrapheneOS Camera + 3rr0r's NoxisCamera (built above). Both replace
+  # LineageOS' Aperture, so it is gone even if one of the two downloads fails.
+  install_apk GrapheneCamera    "$(gh_latest_asset GrapheneOS/Camera '\.apk$' || true)" false Aperture
   install_apk GraphenePdfViewer "$(gh_latest_asset GrapheneOS/PdfViewer '\.apk$' || true)" false
   # Default browser: IronFox (hardened Firefox, uBlock Origin preinstalled)
   install_ironfox

@@ -29,6 +29,9 @@ PRODUCT_PACKAGES += \
     NoxisSettingsProviderOverlay
 
 # Vorgebaute, signierte Apps (von noxis.sh geladen)
+ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GrapheneCamera/GrapheneCamera.apk),)
+PRODUCT_PACKAGES += GrapheneCamera
+endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GraphenePdfViewer/GraphenePdfViewer.apk),)
 PRODUCT_PACKAGES += GraphenePdfViewer
 endif
