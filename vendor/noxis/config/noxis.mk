@@ -29,9 +29,6 @@ PRODUCT_PACKAGES += \
     NoxisSettingsProviderOverlay
 
 # Vorgebaute, signierte Apps (von noxis.sh geladen)
-ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GrapheneCamera/GrapheneCamera.apk),)
-PRODUCT_PACKAGES += GrapheneCamera
-endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GraphenePdfViewer/GraphenePdfViewer.apk),)
 PRODUCT_PACKAGES += GraphenePdfViewer
 endif
@@ -62,7 +59,7 @@ endif
 
 # 3rr0r's own apps (Nothing design, built from source by the "Noxis apps" GitHub Action)
 # They replace LineageOS' calendar, clock and calculator; phone/notes/battery are added.
-NOXIS_OWN_APPS := NoxisCalendar NoxisClock NoxisCalculator NoxisNotes NoxisCall NoxisBattery
+NOXIS_OWN_APPS := NoxisCalendar NoxisClock NoxisCalculator NoxisNotes NoxisCall NoxisBattery NoxisCamera
 PRODUCT_PACKAGES += $(foreach a,$(NOXIS_OWN_APPS),$(if $(wildcard $(NOXIS_PATH)/prebuilt/$(a)/$(a).apk),$(a)))
 
 # eSIM ohne Google

@@ -70,7 +70,7 @@ ok "dm-verity bleibt an (Standard)" "grep -q 'BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS :
 # Fehler lange nicht aufgefallen. Jetzt wird die Abwesenheit geprueft.
 ok "sync: --depth=1 nur beim init" "grep -q 'repo init .*--depth=1' $LOG && ! grep -q 'repo sync .*--depth' $LOG"
 ok "sync: Abrufe begrenzt" "grep -qE 'repo sync .*-j[1-8]( |$)' $LOG"
-./noxis.sh apps > "$W/apps.out" 2>&1;                    ok "apps" "[ -f vendor/noxis/prebuilt/GrapheneCamera/GrapheneCamera.apk ]"
+./noxis.sh apps > "$W/apps.out" 2>&1;                    ok "apps" "[ -f vendor/noxis/prebuilt/GraphenePdfViewer/GraphenePdfViewer.apk ]"
 ok "apps: richtige Assets (kein .idsig)" "grep -q 'Camera-71.apk\$' $W/apps.out"
 ok "apps: Cromite removed from the image" "! grep -qi cromite vendor/noxis/config/noxis.mk"
 ok "apps: IronFox is the browser" "grep -q IronFox vendor/noxis/config/noxis.mk && grep -q org.ironfoxoss.ironfox vendor/noxis/overlay/NoxisFrameworksOverlay/res/values/config.xml"

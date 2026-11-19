@@ -2,6 +2,10 @@
 
 Made by 3rr0r303YT on TikTok · GPL-3.0
 
+## 1.3 (next)
+
+- **NoxisCamera** ([NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera)) is the system camera: offline, metadata stripped, encrypted vault, zoom up to 40x. Replaces the GrapheneOS Camera.
+
 ## 1.2
 
 - **Faster, flagship feel:** Settings, launcher and Noxis Guard are compiled fully ahead of time (like SystemUI already was), system_server too – snappier app switching, notifications and launches without JIT warm-up.
