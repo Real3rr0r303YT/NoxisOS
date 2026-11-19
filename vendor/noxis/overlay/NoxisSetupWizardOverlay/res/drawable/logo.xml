@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later
+     Noxis OS – Made by 3rr0r303YT on TikTok
+     SetupWizard's logo lives in res/drawable/ (no qualifier). An overlay value
+     in drawable-nodpi loses the config match against it, so the overlay has
+     to define "logo" in the same folder too; it points at the Noxis PNG. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/noxis_setup_logo"
+    android:gravity="center" />
