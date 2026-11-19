@@ -302,6 +302,7 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 | About phone | `version.mk` + `NoxisLineageSdkOverlay` | "NoxisOS version" instead of "LineageOS version" |
 | System updates | `NoxisUpdaterOverlay` | NoxisOS name, Noxis mark and colours on the updater card, links to GitHub |
 | Browser | `vendor/lineage/config/common.mk` | Jelly out, IronFox as default browser |
+| Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS", Noxis mark in the welcome animation (`raw/lottie_welcome`, made by `tools/gen_setup_lottie.py`) and on the finish screen |
 | Recovery + fastbootd | `bootable/recovery` | Noxis logos (blue recovery, red fastbootd), Noxis menu colours and "NoxisOS 1.2 (DATE)" instead of LineageOS logos and "Version 24.0" |
 | zram | `device/nothing/asteroids/init/fstab.zram.2g` | 50 % of RAM instead of a fixed 2 GB |
 | Easter egg | `LineageParts` `PlatLogoActivity` | tap the NoxisOS version: Noxis dot-matrix egg – waves on every touch, a message after 7 taps, long press for the credit |

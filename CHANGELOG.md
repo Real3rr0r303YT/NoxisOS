@@ -4,6 +4,7 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 
 ## 1.3 (next)
 
+- **Setup wizard:** the welcome animation shows the Noxis mark instead of the LineageOS logo (it is a Lottie animation, `raw/lottie_welcome`, not the `logo` drawable – `tools/gen_setup_lottie.py`).
 - **NoxisCamera** ([NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera)) joins the GrapheneOS Camera: offline, metadata stripped, encrypted vault, zoom up to 40x. The LineageOS camera (Aperture) is removed.
 
 ## 1.2
