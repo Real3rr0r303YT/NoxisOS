@@ -187,6 +187,26 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 
 Vendor-signed APKs with **compressed native libraries** (IronFox, Tor Browser, the KernelSU manager, sometimes Mullvad) cannot be pre-installed system apps on Android 17 without breaking their signature. `./noxis.sh build` detects this, keeps them out of the image and puts them into `postinstall/` – `./noxis.sh postinstall` installs them as normal apps.
 
+### Why are some apps not pre-installed?
+
+Every app ends up on the phone in one of three ways:
+
+| Way | Which apps | Updates |
+|---|---|---|
+| **In the image** (system app) | own Nothing apps, F-Droid, Aurora Store, GrapheneOS Camera + PDF Viewer, Noxis Guard – and Mullvad / IronFox when their APK allows it (see above) | come with every Noxis OTA, nothing to do |
+| **After flashing** (`./noxis.sh postinstall`, normal app) | Termux, Tor Browser, KernelSU manager, IronFox / Mullvad if the build moved them to `postinstall/`, KernelSU modules, your own APKs from `postinstall/` | update themselves (F-Droid, Tor's updater, …); they stay through Noxis OTAs |
+| **You** | anything else – from F-Droid, Aurora Store or as APK | as usual |
+
+Why not everything in the image:
+
+- **Apps that update themselves** (Termux, Tor Browser) work best as normal apps. Baked into the image you would be stuck with the build's version until the next ROM update.
+- **Signature:** vendor-signed APKs with compressed native libraries cannot be system apps on Android 17 without breaking their signature – the build moves them to `postinstall/` automatically.
+- **KernelSU modules** need a running, rooted phone – they cannot be installed while building.
+- **Third-party and closed-source APKs** (e.g. ZArchiver) are not redistributed in this repository. Put them into `postinstall/` yourself.
+- **No Google apps** on purpose: Google Play services and the Play Store are proprietary and phone home – Aurora Store gives you Play Store apps without them.
+
+**After an OTA:** apps in the image are updated with the system. Apps from `postinstall` stay installed. If a new Noxis version adds a new post-install app, connect the phone once and run `./noxis.sh postinstall` again – apps that are already installed are just updated.
+
 ---
 
 ## Security
