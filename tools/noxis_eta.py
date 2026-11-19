@@ -62,6 +62,9 @@ def alive(pid):
         return True
 
 
+ANALYSIS_MAX = 5000
+
+
 def main():
     a = sys.argv[1:]
     if not a:
@@ -74,8 +77,9 @@ def main():
     while alive(pid):
         p = read(path)
         now = time.time()
-        # Soong's own bootstrap shows up as 1/2 or 2/3 steps - that is still analysis
-        if p and p[0] > 50:
+        # Soong's bootstrap/analysis shows up as small jobs (1/2, 295/296 ...) - that is
+        # still analysis; the real build has 100k+ steps
+        if p and p[0] > ANALYSIS_MAX:
             total, done, failed = p
             hist.append((now, done))
             hist = [h for h in hist if now - h[0] <= 1200] or hist[-1:]
@@ -102,7 +106,7 @@ def main():
             if not alive(pid):
                 return
             p = read(path)
-            if p and p[0] > 50:
+            if p and p[0] > ANALYSIS_MAX:
                 hist.append((time.time(), p[1]))
 
 
