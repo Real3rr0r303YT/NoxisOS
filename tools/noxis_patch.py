@@ -360,8 +360,28 @@ def p_easteregg():
     ok(name, "patched")
 
 
+# ------------------------------------------------------------ zram: 50 % of RAM instead of fixed 2 GB
+def p_zram():
+    """The device tree swaps to a fixed 2 GB zram. Flagships (Pixel) use half
+    the RAM: more apps stay in memory instead of being killed and reloaded.
+    zram writeback to flash (512M) stays as it is."""
+    name = "zram 50 % of RAM (instead of 2 GB)"
+    f = "device/nothing/asteroids/init/fstab.zram.2g"
+    if not os.path.exists(path(f)):
+        return ok(name, "skipped (fstab.zram.2g not found)")
+    s = read(f)
+    if "zramsize=50%" in s:
+        return ok(name, "already done")
+    import re
+    n, k = re.subn(r"zramsize=\d+", "zramsize=50%", s, count=1)
+    if not k:
+        return fail(name, "zramsize= not found in " + f)
+    write(f, n)
+    ok(name, "patched")
+
+
 for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc,
-          p_recovery, p_easteregg):
+          p_recovery, p_easteregg, p_zram):
     try:
         p()
     except FileNotFoundError as e:

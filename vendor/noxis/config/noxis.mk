@@ -2,7 +2,7 @@
 #  Noxis OS – Produktkonfiguration
 #  Wird von device/nothing/asteroids/lineage_asteroids.mk geerbt
 # ============================================================
-NOXIS_VERSION := 1.1
+NOXIS_VERSION := 1.2
 NOXIS_PATH := vendor/noxis
 
 # Identität
@@ -25,7 +25,8 @@ PRODUCT_PACKAGES += \
     NoxisSystemUIOverlay \
     NoxisSetupWizardOverlay \
     NoxisLineageSdkOverlay \
-    NoxisUpdaterOverlay
+    NoxisUpdaterOverlay \
+    NoxisSettingsProviderOverlay
 
 # Vorgebaute, signierte Apps (von noxis.sh geladen)
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/GrapheneCamera/GrapheneCamera.apk),)
@@ -88,3 +89,27 @@ endif
 # Restart with the cable plugged in: boot Android instead of the black charging screen
 PRODUCT_COPY_FILES += \
     vendor/noxis/config/init/noxis-charger.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/noxis-charger.rc
+
+# ------------------------------------------------------------ Speed (flagship feel)
+# Compile the apps you touch all the time fully ahead of time ("speed") instead of
+# only the profiled hot paths: no JIT warm-up, smoother first scrolls and launches.
+# SystemUI and the launcher are already "speed" in LineageOS.
+PRODUCT_DEXPREOPT_SPEED_APPS += \
+    Settings \
+    TrebuchetQuickStep \
+    Launcher3QuickStep \
+    NoxisGuard
+# system_server fully compiled: snappier app switching, notifications, permission dialogs
+PRODUCT_SYSTEM_SERVER_COMPILER_FILTER := speed
+
+PRODUCT_SYSTEM_PROPERTIES += \
+    dalvik.vm.boot-dex2oat-threads=8 \
+    dalvik.vm.boot-dex2oat-cpu-set=0,1,2,3,4,5,6,7 \
+    dalvik.vm.dex2oat-threads=8 \
+    dalvik.vm.dex2oat-cpu-set=0,1,2,3,4,5,6,7 \
+    dalvik.vm.madvise.vdexfile.size=104857600 \
+    dalvik.vm.madvise.odexfile.size=104857600 \
+    dalvik.vm.madvise.artfile.size=4294967295
+# boot-dex2oat/dex2oat on all 8 cores: first boot after an OTA and app installs finish
+# faster. Background optimisation (while charging) stays on the small cores (battery).
+# madvise: app code is read ahead in one go -> faster cold starts.

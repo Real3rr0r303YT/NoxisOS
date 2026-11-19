@@ -53,6 +53,7 @@ Note: this is about *apps*, not the bootloader. Unlocking depends on the phone m
 - **No Google, still apps** – F-Droid and Aurora Store (Play Store apps without an account) preinstalled, Termux after the first boot
 - **Own apps in Nothing design** – calendar, clock, calculator, notes, phone, battery
 - **KernelSU modules** – e.g. **NoxisSpoof** (apps see another phone model, switchable, *Off* = real device)
+- **Fast like a flagship** – Settings, launcher, SystemUI and system_server compiled fully ahead of time, zram at 50 % of RAM (more apps stay open), 0.75x animations
 - **OTA updates from GitHub** – Settings → System → System updates
 
 ---
@@ -275,12 +276,13 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 | Kernel hardening | `vendor/noxis/config/BoardConfigNoxis.mk` | `init_on_alloc=1 init_on_free=1 page_alloc.shuffle=1 slab_nomerge randomize_kstack_offset=on` |
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
-| Name | `vendor/lineage/config/version.mk` | "Noxis-1.1-DATE" in Settings (number from `NOXIS_VERSION` in `noxis.mk`) |
+| Name | `vendor/lineage/config/version.mk` | "Noxis-1.2-DATE" in Settings (number from `NOXIS_VERSION` in `noxis.mk`) |
 | Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS" with the Noxis logo |
 | About phone | `version.mk` + `NoxisLineageSdkOverlay` | "NoxisOS version" instead of "LineageOS version" |
 | System updates | `NoxisUpdaterOverlay` | NoxisOS name, Noxis mark and colours on the updater card, links to GitHub |
 | Browser | `vendor/lineage/config/common.mk` | Jelly out, IronFox as default browser |
-| Recovery + fastbootd | `bootable/recovery` | Noxis logos (blue recovery, red fastbootd), Noxis menu colours and "NoxisOS 1.1 (DATE)" instead of LineageOS logos and "Version 24.0" |
+| Recovery + fastbootd | `bootable/recovery` | Noxis logos (blue recovery, red fastbootd), Noxis menu colours and "NoxisOS 1.2 (DATE)" instead of LineageOS logos and "Version 24.0" |
+| zram | `device/nothing/asteroids/init/fstab.zram.2g` | 50 % of RAM instead of a fixed 2 GB |
 | Easter egg | `LineageParts` `PlatLogoActivity` | tap the NoxisOS version: Noxis dot-matrix egg – waves on every touch, a message after 7 taps, long press for the credit |
 | Restart with cable | `vendor/noxis/config/init/noxis-charger.rc` | boots Android instead of the black charging screen after a restart |
 
