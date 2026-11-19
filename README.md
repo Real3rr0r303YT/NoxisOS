@@ -38,6 +38,14 @@ Your phone, your rules. Noxis OS is built from source on LineageOS, signed with 
 
 **Model:** unlocked bootloader + KernelSU in the kernel, root only for apps you allow one by one.
 
+### Why now: Android developer verification (2027)
+
+Google is tying every Android app to a developer whose identity Google has verified – **also for apps from outside the Play Store** (F-Droid, GitHub, websites). It starts on 30 September 2026 in Brazil, Indonesia, Singapore and Thailand and goes global from 2027. On *certified* Android phones (the ones with Google services) an app from an unregistered developer then only installs through a long "advanced flow" with warnings, a restart and a 24-hour wait, or via ADB. F-Droid sees this as a threat to its existence, because it cannot make every upstream developer register with Google.
+
+The check runs through Google Play services ("Android Developer Verifier"). **Noxis OS has no Google services and is not a certified device – so this check does not exist on Noxis.** F-Droid, IronFox, Termux and every APK you choose install like before.
+
+Note: this is about *apps*, not the bootloader. Unlocking depends on the phone maker – Nothing still allows it on the Phone (3a). Unlock it now, while you can.
+
 ### Highlights
 
 - **Noxis Guard** – security center: protection status, offline virus scan (new apps are checked at install), auto-reboot, USB lock, 2G block, VPN killswitch
