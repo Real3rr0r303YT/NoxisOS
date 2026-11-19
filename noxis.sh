@@ -159,7 +159,22 @@ cmd_postinstall() {
     adb install -r "$a" || warn "$(basename "$a") failed"
   done
   # KernelSU modules: copy to Download, then install with root. adb shell
-  # only gets root after you allow "Shell" in the KernelSU app once.
+  # only gets root after you allow "Shell" in the KernelSU app once - and
+  # after a fresh install / factory reset /data/adb/ksud only exists once the
+  # KernelSU app has been opened. So wait for that instead of failing.
+  if compgen -G "$POST/modules/*.zip" >/dev/null; then
+    local try=0
+    until adb shell "su -c 'test -x /data/adb/ksud'" >/dev/null 2>&1; do
+      try=$((try + 1))
+      [ "$try" -le 3 ] || { warn "Still no root for adb – modules skipped"; break; }
+      adb shell monkey -p me.weishu.kernelsu -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+      c "KernelSU modules need root for adb once. On the phone:
+       1. The KernelSU app is opening (if not: open it) – wait until it shows \"Working\"
+       2. KernelSU → Superuser → Shell (com.android.shell) → allow
+       3. If a root request pops up for Shell: allow"
+      read -rp "   Done? Press Enter (Ctrl+C to skip the modules) " _ || true
+    done
+  fi
   for z in "$POST"/modules/*.zip; do
     [ -f "$z" ] || continue
     adb push "$z" "/sdcard/Download/$(basename "$z")" >/dev/null
