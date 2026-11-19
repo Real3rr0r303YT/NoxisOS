@@ -32,7 +32,7 @@ SH
 chmod 755 "$T/bin/gh"
 run() {
   PATH="$T/bin:$PATH" bash -c "set -euo pipefail
-c(){ echo \"[c] \$*\"; }; die(){ echo \"[die] \$*\"; exit 1; }; need(){ command -v \"\$1\" >/dev/null || die \"\$1 fehlt\"; }
+c(){ echo \"[c] \$*\"; }; warn(){ echo \"[warn] \$*\"; }; die(){ echo \"[die] \$*\"; exit 1; }; need(){ command -v \"\$1\" >/dev/null || die \"\$1 fehlt\"; }
 desktop_dir(){ echo '$T/desk'; }
 NOXIS='$REPO'; REL='$T/out'; DEVICE=asteroids
 $block
@@ -59,6 +59,20 @@ assert r["filename"] == "Noxis-1.0-20261111-asteroids-ota.zip"
 PY
 git -C "$T/remote.git" log --oneline -1 main 2>/dev/null | grep -q "OTA: Noxis-1.0-20261111" && ok "ota/asteroids.json committed + pushed" || bad "not pushed"
 touch "$T/existing"; out=$(run); grep -qE "gh release create noxis-20261111-[0-9]{4} " "$T/gh.log" && ok "same day again → tag gets a time suffix" || bad "dup tag"
+python3 - "$T/desk/Noxis-1.0-20261112-asteroids-img.zip" <<'PY'
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1], "w")
+for n in ("boot", "init_boot", "vendor_boot", "recovery", "dtbo", "vbmeta", "system"):
+    z.writestr(n + ".img", n.encode() * 100)
+z.close()
+PY
+mkota "$T/desk/Noxis-1.0-20261112-asteroids-ota.zip" 1; touch -d '+1 min' "$T/desk/Noxis-1.0-20261112-asteroids-ota.zip"
+: > "$T/gh.log"; rm -f "$T/existing"; out=$(run)
+line=$(grep "release create noxis-20261112 " "$T/gh.log")
+ok_all=1; for f in boot.img init_boot.img vendor_boot.img recovery.img dtbo.img vbmeta.img Noxis-1.0-20261112-asteroids-img.zip SHA256SUMS; do grep -q "/$f" <<<"$line" || ok_all=0; done
+[ $ok_all = 1 ] && ok "release has boot/init_boot/vendor_boot/recovery/dtbo/vbmeta + img.zip + SHA256SUMS" || bad "images missing: $line / $out"
+grep -q "system.img" <<<"$line" && bad "system.img uploaded alone" || ok "big images only inside img.zip"
+grep -q -- "--notes" <<<"$line" && grep -q "noxis.sh flash" "$T/gh.log" && ok "release notes with install steps" || bad "notes: $line"
 mk="$ROOT/vendor/noxis/config/noxis.mk"
 grep -q "lineage.updater.uri=https://raw.githubusercontent.com/Real3rr0r303YT/NoxisOS/main/ota/{device}.json" "$mk" && ok "phone Updater reads ota/{device}.json from NoxisOS" || bad "updater uri"
 echo; echo "$pass passed, $fail failed"

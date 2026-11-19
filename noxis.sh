@@ -934,6 +934,26 @@ write_ota_json() {  # <ota.zip> <release tag>  → LineageOS Updater JSON on std
 EOF
 }
 
+release_notes() {  # <img.zip name>
+  cat <<EOF
+Noxis OS for the Nothing Phone (3a) (asteroids) – signed with the Noxis release keys.
+
+**Update an existing Noxis:** Settings → System → Updater.
+
+**Fresh install** (bootloader unlocked, Nothing OS firmware on the phone):
+\`\`\`bash
+# 1. put the image zip back together (skip if there is a single $1)
+cat $1.part* > $1
+# 2. flash everything (boot/vbmeta to both slots, system via fastbootd – wipes data)
+git clone https://github.com/Real3rr0r303YT/NoxisOS && cd NoxisOS
+mkdir -p release && mv ../$1 release/ && ./noxis.sh flash
+\`\`\`
+Small images by hand: \`fastboot flash boot_a boot.img\` (same for _b, init_boot, vendor_boot, recovery, dtbo) and \`fastboot --disable-verity --disable-verification flash vbmeta_a vbmeta.img\`.
+
+Checksums: SHA256SUMS. Made by 3rr0r303YT on TikTok – GPL-3.0.
+EOF
+}
+
 cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (read by the phone's Updater)
   need gh "install the GitHub CLI and run 'gh auth login'"
   need unzip "install unzip"
@@ -948,10 +968,39 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
   [ "$tag" != noxis- ] || tag="noxis-$(date -u +%Y%m%d)"
   if gh release view "$tag" -R "$NOXIS_GH_REPO" >/dev/null 2>&1; then tag="$tag-$(date -u +%H%M)"; fi
   ( cd "$(dirname "$ota")" && sha256sum "$(basename "$ota")" ) > "$ota.sha256"
-  c "Release $tag ← $(basename "$ota") ($(du -h "$ota" | cut -f1))"
-  gh release create "$tag" "$ota" "$ota.sha256" -R "$NOXIS_GH_REPO" \
+  local files=("$ota" "$ota.sha256") img stage name part f
+  # Fastboot images of the same build: the small ones (boot, recovery,
+  # vbmeta …) one by one, the whole img.zip in parts below GitHub's 2 GiB
+  # limit (put back together with cat).
+  img="${ota%-ota.zip}-img.zip"
+  [ -f "$img" ] || img="$REL/$(basename "${ota%-ota.zip}")-img.zip"
+  stage=$(mktemp -d)
+  if [ -f "$img" ]; then
+    unzip -tq "$img" >/dev/null || die "img.zip damaged: $img"
+    for name in boot init_boot vendor_boot recovery dtbo vbmeta vbmeta_system vbmeta_vendor; do
+      unzip -l "$img" "$name.img" >/dev/null 2>&1 || continue
+      unzip -oq "$img" "$name.img" -d "$stage"
+      files+=("$stage/$name.img")
+    done
+    if [ "$(stat -c %s "$img")" -lt 2000000000 ]; then
+      files+=("$img")
+    else
+      split -b 1900M -d -a 1 "$img" "$stage/$(basename "$img").part"
+      for part in "$stage/$(basename "$img")".part*; do files+=("$part"); done
+    fi
+    for f in "${files[@]}"; do
+      [ "${f%.sha256}" = "$f" ] || continue
+      ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" )
+    done > "$stage/SHA256SUMS"
+    files+=("$stage/SHA256SUMS")
+  else
+    warn "No img.zip next to the OTA – only the OTA is uploaded"
+  fi
+  c "Release $tag ← $(basename "$ota") ($(du -h "$ota" | cut -f1)) + $(( ${#files[@]} - 1 )) more files"
+  gh release create "$tag" "${files[@]}" -R "$NOXIS_GH_REPO" \
     --title "Noxis OS ${tag#noxis-}" \
-    --notes "Signed OTA for the Nothing Phone (3a) (asteroids). Install: Settings → System → Updater, or adb sideload. SHA-256 in the .sha256 file."
+    --notes "$(release_notes "$(basename "$img")")"
+  rm -rf -- "$stage"
   mkdir -p "$NOXIS/ota"
   json="$NOXIS/ota/$DEVICE.json"
   write_ota_json "$ota" "$tag" > "$json"
