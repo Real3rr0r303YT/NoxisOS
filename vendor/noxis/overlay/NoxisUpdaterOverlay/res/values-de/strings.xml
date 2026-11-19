@@ -7,4 +7,8 @@
     <string name="list_build_version_date">NoxisOS – <xliff:g id="date" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%2$s</xliff:g></string>
     <string name="info_dialog_message">NoxisOS-Updates sind vollständige Installationspakete. Du musst also immer nur das neueste Update installieren, auch wenn du welche übersprungen hast!</string>
     <string name="toast_forced_update_recovery">Die Recovery-Updates lassen sich auf diesem Gerät nicht abschalten.</string>
+    <string name="menu_view_downloads">Auf GitHub ansehen</string>
+    <string name="header_review_updates">Updates und Änderungen findest du auf</string>
+    <string name="found_bug">Fehler gefunden? Melde ihn auf GitHub:</string>
+    <string name="list_major_upgrade_recovery_install">Große NoxisOS-Upgrades musst du von Hand flashen (./noxis.sh flash). Siehe README auf GitHub.</string>
 </resources>

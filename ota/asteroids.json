@@ -1,13 +1,16 @@
-{
-  "response": [
-    {
-      "datetime": 1795026166,
-      "filename": "Noxis-1.0-20261119-asteroids-ota.zip",
-      "id": "f711e87648c5cfadf6f964dbbede3f5d07b703c285a643c5b4f648fc4ce0a3af",
-      "romtype": "UNOFFICIAL",
-      "size": 1744541856,
-      "url": "https://github.com/Real3rr0r303YT/NoxisOS/releases/download/noxis-20261119/Noxis-1.0-20261119-asteroids-ota.zip",
-      "version": "24.0"
-    }
-  ]
-}
+[
+  {
+    "datetime": 1795026166,
+    "type": "unofficial",
+    "version": "24.0",
+    "files": [
+      {
+        "filename": "Noxis-1.0-20261119-asteroids-ota.zip",
+        "sha256": "f711e87648c5cfadf6f964dbbede3f5d07b703c285a643c5b4f648fc4ce0a3af",
+        "size": 1744541856,
+        "url": "https://github.com/Real3rr0r303YT/NoxisOS/releases/download/noxis-20261119/Noxis-1.0-20261119-asteroids-ota.zip",
+        "os_sdk_level": 37
+      }
+    ]
+  }
+]

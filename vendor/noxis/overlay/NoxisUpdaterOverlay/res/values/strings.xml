@@ -9,4 +9,16 @@
     <string name="export_path" translatable="false">NoxisOS updates/</string>
     <string name="info_dialog_message">NoxisOS updates are full installation packages. That means you can always install only the latest update, even if you skipped some in between!</string>
     <string name="toast_forced_update_recovery">It is impossible to disable recovery updates on this device.</string>
+    <!-- lineage-24 Updater (Compose UI) -->
+    <string name="brand_name" translatable="false">NoxisOS</string>
+    <string name="header_build_version" translatable="false">NoxisOS</string>
+    <string name="header_download_url" translatable="false">github.com/Real3rr0r303YT/NoxisOS</string>
+    <string name="menu_changelog_url" translatable="false">https://github.com/Real3rr0r303YT/NoxisOS/releases</string>
+    <string name="report_issue_url" translatable="false">https://github.com/Real3rr0r303YT/NoxisOS/issues</string>
+    <string name="updater_server_url" translatable="false">https://raw.githubusercontent.com/Real3rr0r303YT/NoxisOS/main/ota/{device}.json</string>
+    <string name="blocked_update_info_url" translatable="false">https://github.com/Real3rr0r303YT/NoxisOS</string>
+    <string name="menu_view_downloads">View on GitHub</string>
+    <string name="header_review_updates">Review updates and recent changes on</string>
+    <string name="found_bug">Found a bug? Report it on GitHub:</string>
+    <string name="list_major_upgrade_recovery_install">Major NoxisOS upgrades must be flashed manually (./noxis.sh flash). See the README on GitHub.</string>
 </resources>

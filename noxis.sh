@@ -914,24 +914,46 @@ ota_timestamp() {  # build time of the OTA (the Updater only offers builds newer
   echo "$ts"
 }
 
-write_ota_json() {  # <ota.zip> <release tag>  → LineageOS Updater JSON on stdout
-  local ota="$1" tag="$2" file size id
-  file=$(basename "$ota"); size=$(stat -c %s "$ota"); id=$(sha256sum "$ota" | cut -d' ' -f1)
-  cat <<EOF
-{
-  "response": [
-    {
-      "datetime": $(ota_timestamp "$ota"),
-      "filename": "$file",
-      "id": "$id",
-      "romtype": "UNOFFICIAL",
-      "size": $size,
-      "url": "https://github.com/$NOXIS_GH_REPO/releases/download/$tag/$file",
-      "version": "24.0"
-    }
-  ]
+write_ota_json() {  # <ota.zip> <release tag>  → Updater JSON (LineageOS 24 "api/v2" format) on stdout
+  # The lineage-24 Updater expects a JSON *array* of builds, each with a
+  # "files" list (see NetworkUpdate.kt in packages/apps/Updater). It only
+  # offers a build whose datetime is newer than ro.build.date.utc, whose
+  # type matches ro.lineage.releasetype and whose os_sdk_level is not lower
+  # than the phone's. ota_property_files lets it stream the A/B payload.
+  local ota="$1" tag="$2"
+  python3 - "$ota" "https://github.com/$NOXIS_GH_REPO/releases/download/$tag/$(basename "$ota")" \
+    "${NOXIS_RELEASE_TYPE:-UNOFFICIAL}" "${NOXIS_LINEAGE_VERSION:-24.0}" <<'PY'
+import hashlib, json, os, sys, zipfile
+ota, url, rtype, version = sys.argv[1:5]
+meta = {}
+with zipfile.ZipFile(ota) as z:
+    try:
+        for line in z.read("META-INF/com/android/metadata").decode().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                meta[k.strip()] = v.strip()
+    except KeyError:
+        pass
+h = hashlib.sha256()
+with open(ota, "rb") as f:
+    for chunk in iter(lambda: f.read(1 << 20), b""):
+        h.update(chunk)
+ts = int(meta.get("post-timestamp") or os.path.getmtime(ota))
+entry = {
+    "filename": os.path.basename(ota),
+    "sha256": h.hexdigest(),
+    "size": os.path.getsize(ota),
+    "url": url,
 }
-EOF
+if meta.get("post-security-patch-level"):
+    entry["os_patch_level"] = meta["post-security-patch-level"]
+if meta.get("post-sdk-level", "").isdigit():
+    entry["os_sdk_level"] = int(meta["post-sdk-level"])
+if meta.get("ota-property-files"):
+    entry["ota_property_files"] = meta["ota-property-files"]
+print(json.dumps([{"datetime": ts, "type": rtype.lower(), "version": version,
+                   "files": [entry]}], indent=2))
+PY
 }
 
 release_notes() {  # <img.zip name>

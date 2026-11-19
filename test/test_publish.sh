@@ -11,7 +11,7 @@ mkota() {  # <file> <with cert 0|1>
   python3 - "$1" "$2" <<'PY'
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1], "w")
-z.writestr("META-INF/com/android/metadata", "ota-type=AB\npost-timestamp=1790000000\npre-device=asteroids\n")
+z.writestr("META-INF/com/android/metadata", "ota-type=AB\npost-timestamp=1790000000\npre-device=asteroids\npost-sdk-level=37\npost-security-patch-level=2026-11-01\nota-property-files=payload_metadata.bin:100:200,payload.bin:100:1024,payload_properties.txt:2000:150\n")
 if sys.argv[2] == "1":
     z.writestr("META-INF/com/android/otacert", "-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n")
 z.writestr("payload.bin", b"\0" * 1024)
@@ -48,15 +48,21 @@ mkota "$T/desk/Noxis-1.0-20261111-asteroids-ota.zip" 1
 out=$(run); echo "$out" | grep -q "Published" && ok "publish runs through" || bad "publish: $out"
 grep -q "gh release create noxis-20261111 $T/desk/Noxis-1.0-20261111-asteroids-ota.zip" "$T/gh.log" && ok "release tag noxis-20261111 with OTA + .sha256" || bad "gh call: $(cat "$T/gh.log")"
 J="$REPO/ota/asteroids.json"
-python3 - "$J" "$T/desk/Noxis-1.0-20261111-asteroids-ota.zip" <<'PY' && ok "Updater JSON: datetime from OTA metadata, size, sha256 id, release URL" || bad "json: $(cat "$J")"
+python3 - "$J" "$T/desk/Noxis-1.0-20261111-asteroids-ota.zip" <<'PY' && ok "Updater JSON (lineage-24 v2): array, datetime/sdk/patch from OTA metadata, files[0] sha256/size/url" || bad "json: $(cat "$J")"
 import json, sys, hashlib, os
-r = json.load(open(sys.argv[1]))["response"][0]
+data = json.load(open(sys.argv[1]))
+assert isinstance(data, list) and len(data) == 1, data
+r = data[0]
 ota = sys.argv[2]
 assert r["datetime"] == 1790000000, r
-assert r["size"] == os.path.getsize(ota)
-assert r["id"] == hashlib.sha256(open(ota, "rb").read()).hexdigest()
-assert r["url"] == "https://github.com/Real3rr0r303YT/NoxisOS/releases/download/noxis-20261111/Noxis-1.0-20261111-asteroids-ota.zip", r["url"]
-assert r["filename"] == "Noxis-1.0-20261111-asteroids-ota.zip"
+assert r["type"] == "unofficial" and r["version"] == "24.0", r
+f = r["files"][0]
+assert f["size"] == os.path.getsize(ota)
+assert f["sha256"] == hashlib.sha256(open(ota, "rb").read()).hexdigest()
+assert f["url"] == "https://github.com/Real3rr0r303YT/NoxisOS/releases/download/noxis-20261111/Noxis-1.0-20261111-asteroids-ota.zip", f["url"]
+assert f["filename"] == "Noxis-1.0-20261111-asteroids-ota.zip"
+assert f["os_sdk_level"] == 37 and f["os_patch_level"] == "2026-11-01", f
+assert f["ota_property_files"].startswith("payload_metadata.bin:"), f
 PY
 git -C "$T/remote.git" log --oneline -1 main 2>/dev/null | grep -q "OTA: Noxis-1.0-20261111" && ok "ota/asteroids.json committed + pushed" || bad "not pushed"
 touch "$T/existing"; out=$(run); grep -qE "gh release create noxis-20261111-[0-9]{4} " "$T/gh.log" && ok "same day again → tag gets a time suffix" || bad "dup tag"
