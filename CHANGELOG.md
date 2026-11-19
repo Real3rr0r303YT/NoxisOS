@@ -13,6 +13,7 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 - **Faster cold starts:** app code is read ahead in one go (Pixel settings).
 - **zram 50 % of RAM instead of a fixed 2 GB:** many more apps stay open in the background instead of reloading.
 - **Animations 0.75x** by default on fresh installs.
+- **publish:** releases are tagged `noxis-<version>-<date>`, older ROM releases are deleted after a successful upload (`NOXIS_KEEP_RELEASES`).
 - **OTA fix:** the vbmeta inside the update now has the same verified-boot flags as the first flash – before, an update would not boot and the phone fell back to the old version.
 - fastbootd: Noxis logo in red, recovery menus in Noxis blue, fastbootd menus in red.
 

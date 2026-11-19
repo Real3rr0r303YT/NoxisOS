@@ -1000,7 +1000,9 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
   [ "$(stat -c %s "$ota")" -lt 2147483648 ] || die "OTA larger than 2 GiB – GitHub releases allow at most 2 GiB per file"
   unzip -tq "$ota" >/dev/null || die "OTA zip damaged: $ota"
   unzip -l "$ota" | grep -q "META-INF/com/android/otacert" || die "OTA without signing certificate – create it with ./noxis.sh sign"
-  tag="noxis-$(basename "$ota" | sed -n 's/^Noxis-[0-9.]*-\([0-9]\{8\}\)-.*/\1/p')"
+  # Tag with version and date (noxis-1.2-20261119): a new version on the
+  # same day gets its own release instead of a time suffix.
+  tag="noxis-$(basename "$ota" | sed -n 's/^Noxis-\([0-9.]*-[0-9]\{8\}\)-.*/\1/p')"
   [ "$tag" != noxis- ] || tag="noxis-$(date -u +%Y%m%d)"
   ( cd "$(dirname "$ota")" && sha256sum "$(basename "$ota")" ) > "$ota.sha256"
   # Same OTA already released (e.g. an earlier publish broke off)? Then
@@ -1067,7 +1069,29 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
   # GitHub may have newer commits (app builds, script updates) – put ours on top
   git -C "$NOXIS" pull -q --rebase origin main || die "git pull failed – run 'git status' in $NOXIS"
   git -C "$NOXIS" push -q origin HEAD:main
+  # Only after the new release and the Updater JSON are online
+  prune_old_releases "$tag"
   c "Published. Phone: Settings → System → Updater → Check for updates"
+}
+
+# Older ROM releases are removed (the phone only needs the newest OTA, and
+# old builds would still show the LineageOS branding etc.). The apps release
+# "noxis-apps" is never touched. NOXIS_KEEP_RELEASES=n keeps the newest n
+# releases including the new one; NOXIS_KEEP_RELEASES=0 keeps all.
+prune_old_releases() {  # <tag just published>
+  local keep="${NOXIS_KEEP_RELEASES:-1}" t n=1
+  [ "$keep" -gt 0 ] 2>/dev/null || return 0
+  while read -r t; do
+    case "$t" in ""|noxis-apps|"$1") continue ;; noxis-*) ;; *) continue ;; esac
+    n=$((n + 1))
+    [ "$n" -le "$keep" ] && continue
+    if gh release delete "$t" -R "$NOXIS_GH_REPO" --yes --cleanup-tag >/dev/null 2>&1; then
+      c "Old release $t deleted (keep: NOXIS_KEEP_RELEASES=$keep)"
+    else
+      warn "Could not delete old release $t – delete it on GitHub by hand"
+    fi
+  done < <(gh release list -R "$NOXIS_GH_REPO" -L 100 --json tagName,createdAt \
+             -q 'sort_by(.createdAt) | reverse | .[].tagName' 2>/dev/null || true)
 }
 
 # ------------------------------------------------------------ cleanup

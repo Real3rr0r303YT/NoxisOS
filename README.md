@@ -148,7 +148,7 @@ Keep the PC awake during the build (Hyprland): `pkill hypridle; ./noxis.sh build
 
 ### Publishing (`./noxis.sh publish`)
 
-Uploads the newest signed OTA, the small images, the image zip (split below 2 GiB) and `SHA256SUMS` as a GitHub release, and writes [`ota/asteroids.json`](ota/) in the format of the LineageOS 24 Updater (a JSON array of builds with `files`, `os_sdk_level`, `ota_property_files`). Running it again for the same OTA completes the existing release instead of making a second one. Needs `gh auth login` once.
+Uploads the newest signed OTA, the small images, the image zip (split below 2 GiB) and `SHA256SUMS` as a GitHub release, and writes [`ota/asteroids.json`](ota/) in the format of the LineageOS 24 Updater (a JSON array of builds with `files`, `os_sdk_level`, `ota_property_files`). Releases are tagged with version and date (`noxis-1.2-20261119`). Running it again for the same OTA completes the existing release instead of making a second one. Once the new release and the JSON are online, **older ROM releases are deleted** (the `noxis-apps` release stays); `NOXIS_KEEP_RELEASES=3` keeps the newest three, `NOXIS_KEEP_RELEASES=0` keeps all. Needs `gh auth login` once.
 
 Full Nothing OS OTAs for the blobs: <https://github.com/spike0en/nothing_archive>
 
