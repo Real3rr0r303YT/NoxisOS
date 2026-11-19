@@ -18,7 +18,7 @@
 #  ./noxis.sh eta                How long the running build still needs (2nd terminal)
 #  ./noxis.sh opsec              Check the built image against the OPSEC rules
 #  ./noxis.sh sign               Sign → OTA + images → Desktop, delete out/
-#  ./noxis.sh cleanup            ROM to the Desktop, delete out/ (NOXIS_KEEP_OUT=1 keeps it)
+#  ./noxis.sh cleanup            ROM to the Desktop (NOXIS_KEEP_OUT=0 also deletes out/)
 #  ./noxis.sh flash              Install on the phone (guided, bootloader stays unlocked)
 #  ./noxis.sh postinstall        After the first boot: Termux/Tor/... via adb
 #  ./noxis.sh ksu                KernelSU manager matching the kernel (installs via adb)
@@ -983,8 +983,11 @@ cmd_cleanup() {
     [ "$(sha256sum < "$f")" = "$(sha256sum < "$desk/$(basename "$f")")" ] \
       || die "Copy of $(basename "$f") is broken – out/ is NOT deleted"
   done
-  if [ "${NOXIS_KEEP_OUT:-0}" = "1" ]; then
-    c "NOXIS_KEEP_OUT=1 – out/ is kept"; return 0
+  # out/ is kept by default (next build: minutes instead of hours).
+  # NOXIS_KEEP_OUT=0 frees the space.
+  if [ "${NOXIS_KEEP_OUT:-1}" != "0" ]; then
+    c "out/ is kept for fast rebuilds ($(du -sh "$SRC/out" 2>/dev/null | cut -f1)) – NOXIS_KEEP_OUT=0 ./noxis.sh cleanup deletes it"
+    return 0
   fi
   local o="$SRC/out"
   [ -n "$SRC" ] && [ "$o" = "$SRC/out" ] || die "Unexpected out path: $o"

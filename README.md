@@ -42,7 +42,7 @@ Everything works through Nothing's own vendor drivers: Wi-Fi, mobile network + V
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
 ./noxis.sh build                    # user build (checks privileged permissions first)
 ./noxis.sh eta                      # (2nd terminal) time left of the running build – build prints it every 5 min too
-./noxis.sh sign                     # → ROM on the desktop, out/ is deleted (NOXIS_KEEP_OUT=1 keeps it)
+./noxis.sh sign                     # → ROM on the desktop, out/ stays for fast rebuilds (NOXIS_KEEP_OUT=0 deletes it)
 ./noxis.sh flash                    # guided: boot images (both slots) → fastbootd → system partitions
 ./noxis.sh postinstall              # after first boot: Termux, Tor Browser … via adb (see below)
 ./noxis.sh publish                  # signed OTA → GitHub release → phone updates itself
@@ -62,13 +62,13 @@ Full Nothing OS OTAs: <https://github.com/spike0en/nothing_archive>
 | Peak during `build` (+ `out/`) | ~250 GB |
 | After `sign` (out/ and target_files deleted) | ~110 GB |
 
-`NOXIS_KEEP_OUT=1` keeps `out/` – the next build then takes minutes instead of hours.
+`out/` is kept by default – the next build then takes minutes instead of hours. `NOXIS_KEEP_OUT=0` deletes it to free ~120 GB.
 
 ### Build environment
 
 | Variable | Effect |
 |---|---|
-| `NOXIS_KEEP_OUT=1` | keep `out/` after signing (fast rebuilds) |
+| `NOXIS_KEEP_OUT=0` | delete `out/` after signing (default: kept for fast rebuilds) |
 | `NOXIS_JOBS=n` | number of parallel jobs (default: (RAM + swap/2) / 4 GB) |
 | `NOXIS_DEBUG=1` | **debug build**: userdebug, ADB from the first boot without approval – for boot-loop hunting only |
 | `NOXIS_CCACHE=1` | turn ccache on (off by default, see Known issues) |
