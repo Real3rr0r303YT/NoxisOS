@@ -966,8 +966,18 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
   unzip -l "$ota" | grep -q "META-INF/com/android/otacert" || die "OTA without signing certificate – create it with ./noxis.sh sign"
   tag="noxis-$(basename "$ota" | sed -n 's/^Noxis-[0-9.]*-\([0-9]\{8\}\)-.*/\1/p')"
   [ "$tag" != noxis- ] || tag="noxis-$(date -u +%Y%m%d)"
-  if gh release view "$tag" -R "$NOXIS_GH_REPO" >/dev/null 2>&1; then tag="$tag-$(date -u +%H%M)"; fi
   ( cd "$(dirname "$ota")" && sha256sum "$(basename "$ota")" ) > "$ota.sha256"
+  # Same OTA already released (e.g. an earlier publish broke off)? Then
+  # complete that release instead of making a second one.
+  local update=0
+  if gh release view "$tag" -R "$NOXIS_GH_REPO" >/dev/null 2>&1; then
+    if [ "$(gh release download "$tag" -R "$NOXIS_GH_REPO" -p "$(basename "$ota").sha256" -O - 2>/dev/null | cut -d' ' -f1)" \
+         = "$(cut -d' ' -f1 "$ota.sha256")" ]; then
+      update=1
+    else
+      tag="$tag-$(date -u +%H%M)"
+    fi
+  fi
   local files=("$ota" "$ota.sha256") img stage name part f
   # Fastboot images of the same build: the small ones (boot, recovery,
   # vbmeta …) one by one, the whole img.zip in parts below GitHub's 2 GiB
@@ -997,16 +1007,30 @@ cmd_publish() {  # newest signed OTA → GitHub release + ota/<device>.json (rea
     warn "No img.zip next to the OTA – only the OTA is uploaded"
   fi
   c "Release $tag ← $(basename "$ota") ($(du -h "$ota" | cut -f1)) + $(( ${#files[@]} - 1 )) more files"
-  gh release create "$tag" "${files[@]}" -R "$NOXIS_GH_REPO" \
-    --title "Noxis OS ${tag#noxis-}" \
-    --notes "$(release_notes "$(basename "$img")")"
+  if [ "$update" = 1 ]; then
+    c "Release $tag already has this OTA – adding the missing files"
+    local missing=() have
+    have=$(gh release view "$tag" -R "$NOXIS_GH_REPO" --json assets -q '.assets[].name' 2>/dev/null || true)
+    for f in "${files[@]}"; do
+      [ "$(basename "$f")" = SHA256SUMS ] || ! grep -qxF "$(basename "$f")" <<<"$have" || continue
+      missing+=("$f")
+    done
+    [ ${#missing[@]} = 0 ] || gh release upload "$tag" "${missing[@]}" -R "$NOXIS_GH_REPO" --clobber
+    gh release edit "$tag" -R "$NOXIS_GH_REPO" --notes "$(release_notes "$(basename "$img")")" >/dev/null
+  else
+    gh release create "$tag" "${files[@]}" -R "$NOXIS_GH_REPO" \
+      --title "Noxis OS ${tag#noxis-}" \
+      --notes "$(release_notes "$(basename "$img")")"
+  fi
   rm -rf -- "$stage"
   mkdir -p "$NOXIS/ota"
   json="$NOXIS/ota/$DEVICE.json"
   write_ota_json "$ota" "$tag" > "$json"
   git -C "$NOXIS" add "ota/$DEVICE.json"
-  git -C "$NOXIS" commit -qm "OTA: $(basename "$ota")"
-  git -C "$NOXIS" push -q origin HEAD
+  git -C "$NOXIS" diff --cached --quiet || git -C "$NOXIS" commit -qm "OTA: $(basename "$ota")"
+  # GitHub may have newer commits (app builds, script updates) – put ours on top
+  git -C "$NOXIS" pull -q --rebase origin main || die "git pull failed – run 'git status' in $NOXIS"
+  git -C "$NOXIS" push -q origin HEAD:main
   c "Published. Phone: Settings → System → Updater → Check for updates"
 }
 

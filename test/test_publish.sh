@@ -25,6 +25,7 @@ mkdir -p "$T/bin" "$T/desk" "$T/out"
 cat > "$T/bin/gh" <<SH
 #!/bin/sh
 echo "gh \$*" >> "$T/gh.log"
+[ "\$1 \$2" = "release download" ] && [ -f "$T/remote_sha" ] && { cat "$T/remote_sha"; exit 0; }
 [ "\$1 \$2" = "release view" ] && [ -f "$T/existing" ] && exit 0
 [ "\$1 \$2" = "release view" ] && exit 1
 exit 0
@@ -73,6 +74,9 @@ ok_all=1; for f in boot.img init_boot.img vendor_boot.img recovery.img dtbo.img 
 [ $ok_all = 1 ] && ok "release has boot/init_boot/vendor_boot/recovery/dtbo/vbmeta + img.zip + SHA256SUMS" || bad "images missing: $line / $out"
 grep -q "system.img" <<<"$line" && bad "system.img uploaded alone" || ok "big images only inside img.zip"
 grep -q -- "--notes" <<<"$line" && grep -q "noxis.sh flash" "$T/gh.log" && ok "release notes with install steps" || bad "notes: $line"
+touch "$T/existing"; cp "$T/desk/Noxis-1.0-20261112-asteroids-ota.zip.sha256" "$T/remote_sha"; : > "$T/gh.log"; out=$(run)
+grep -q "release upload noxis-20261112 " "$T/gh.log" && ! grep -q "release create" "$T/gh.log" && ok "same OTA again → completes the existing release, no second one" || bad "resume: $(cat "$T/gh.log") $out"
+rm -f "$T/remote_sha" "$T/existing"
 mk="$ROOT/vendor/noxis/config/noxis.mk"
 grep -q "lineage.updater.uri=https://raw.githubusercontent.com/Real3rr0r303YT/NoxisOS/main/ota/{device}.json" "$mk" && ok "phone Updater reads ota/{device}.json from NoxisOS" || bad "updater uri"
 echo; echo "$pass passed, $fail failed"
