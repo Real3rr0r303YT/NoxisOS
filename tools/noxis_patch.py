@@ -289,9 +289,9 @@ def p_openeuicc():
 
 # ------------------------------------------------------------ Recovery: Noxis logo + version
 def p_recovery():
-    """LineageOS recovery: Noxis logos (vendor/noxis/branding/recovery) and
-    "NoxisOS 1.1 (DATE)" in the title instead of "Version 24.0 (DATE)"."""
-    name = "Recovery branding (logo, NoxisOS version)"
+    """LineageOS recovery + fastbootd: Noxis logos (vendor/noxis/branding/recovery),
+    Noxis menu colours and "NoxisOS 1.1 (DATE)" instead of "Version 24.0 (DATE)"."""
+    name = "Recovery/fastbootd branding (logo, colours, NoxisOS version)"
     rec = "bootable/recovery"
     if not os.path.isdir(path(rec)):
         return ok(name, "skipped (no bootable/recovery)")
@@ -320,7 +320,29 @@ def p_recovery():
         changed = True
     elif new not in s:
         return fail(name, "title line in recovery.cpp not found")
-    ok(name, "patched" if changed else "already done")
+    # menu colours: recovery purple/pink -> Noxis blue, fastbootd orange/yellow -> red
+    f = f"{rec}/recovery_ui/screen_ui.cpp"
+    s = read(f)
+    a, b = s.find("void ScreenRecoveryUI::SetColor("), s.find("case UIElement::LOG:")
+    note = ""
+    if a < 0 or b < a:
+        note = " (menu colours: SetColor not found, kept)"
+    else:
+        body = s[a:b]
+        for o, n in (("0xf8, 0x90, 0xff", "0x7f, 0xa8, 0xff"),
+                     ("0x7c * 0.20, 0x4d * 0.20, 0xff * 0.20", "0x7f * 0.20, 0xa8 * 0.20, 0xff * 0.20"),
+                     ("0x7c, 0x4d, 0xff", "0x3d, 0x5a, 0xa8"),
+                     ("0xfd, 0xd8, 0x35", "0xff, 0x78, 0x78"),
+                     ("0xfd, 0xd8,0x35", "0xff, 0x78, 0x78"),
+                     ("0xe6 * 0.20, 0x51 * 0.20, 0x00 * 0.20", "0xd7 * 0.20, 0x19 * 0.20, 0x21 * 0.20"),
+                     ("0xe6, 0x51, 0x00", "0xd7, 0x19, 0x21"),
+                     ("if (fastbootd_logo_enabled_)\n        gr_color(0, 0, 0, 255);",
+                      "if (fastbootd_logo_enabled_)\n        gr_color(0xf0, 0xf4, 0xfa, 255);")):
+            body = body.replace(o, n)
+        if body != s[a:b]:
+            write(f, s[:a] + body + s[b:])
+            changed = True
+    ok(name, ("patched" if changed else "already done") + note)
 
 
 # ------------------------------------------------------------ Easter egg: Noxis instead of LineageOS
