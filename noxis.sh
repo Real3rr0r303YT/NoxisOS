@@ -1449,7 +1449,9 @@ EOF
       avb_to_bootloader
       slot=$(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')
       c "flash vbmeta_${slot:-a} (verification ON)"
-      flash_part "vbmeta_${slot:-a}" "$v" || die "flash failed"
+      # Plain fastboot flash: flash_part would add --disable-verity
+      # --disable-verification and turn verification off again.
+      fastboot flash "vbmeta_${slot:-a}" "$v" || die "flash failed"
       rm -f "$v"
       fastboot reboot
       c "Wait 5 minutes. Android boots → ./noxis.sh avb status   ·   it does not → ./noxis.sh avb log"
@@ -1467,6 +1469,12 @@ EOF
       # /system - with verification off (vbmeta flags 3) it stays empty.
       pv=$(adb shell getprop partition.system.verified | tr -d '\r')
       [ -z "$vm" ] && [ -n "$pv" ] && vm=enforcing
+      # Most direct proof: dm-verity devices for system/vendor in the mapper
+      # (Nothing's bootloader passes no veritymode while unlocked).
+      if [ -z "$vm" ] && { adb shell ls /dev/block/mapper 2>/dev/null || true; } | tr -d '\r' \
+           | grep -qE '^(system|vendor)(_[ab])?-verity$'; then
+        vm=enforcing; pv="${pv:-dm-verity on system/vendor}"
+      fi
       printf '    %-22s %s\n' "slot" "$slot" "verifiedbootstate" "$vbs" "veritymode" "${vm:-?}" \
         "dm-verity /system" "${pv:-off}" "bootloader" "${ds:-?}" \
         "OEM unlocking allowed" "${oem:-? (checked in fastboot before locking)}"
@@ -1583,7 +1591,7 @@ EOF
       avb_verify_image "$v"
       slot=$(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')
       c "flash vbmeta_${slot:-a} (verification ON)"
-      flash_part "vbmeta_${slot:-a}" "$v" || { rm -f "$v"; fastboot reboot >/dev/null 2>&1 || true; die "flash failed – NOT locked"; }
+      fastboot flash "vbmeta_${slot:-a}" "$v" || { rm -f "$v"; fastboot reboot >/dev/null 2>&1 || true; die "flash failed – NOT locked"; }
       rm -f "$v"
       avb_mark locked
       c "fastboot flashing lock – confirm on the phone with the volume keys + power"
