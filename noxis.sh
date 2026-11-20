@@ -1413,20 +1413,30 @@ EOF
       ;;
     status)
       adb_ready || die "No phone via adb (USB debugging on?)"
-      local vbs vm ds oem slot
+      local vbs vm ds oem slot pv
       vbs=$(adb shell getprop ro.boot.verifiedbootstate | tr -d '\r')
       vm=$(adb shell getprop ro.boot.veritymode | tr -d '\r')
       ds=$(adb shell getprop ro.boot.vbmeta.device_state | tr -d '\r')
       oem=$(adb shell getprop sys.oem_unlock_allowed | tr -d '\r')
       slot=$(adb shell getprop ro.boot.slot_suffix | tr -d '\r')
+      # Not every bootloader passes androidboot.veritymode. fs_mgr sets
+      # partition.system.verified only when it really set up dm-verity for
+      # /system - with verification off (vbmeta flags 3) it stays empty.
+      pv=$(adb shell getprop partition.system.verified | tr -d '\r')
+      [ -z "$vm" ] && [ -n "$pv" ] && vm=enforcing
       printf '    %-22s %s\n' "slot" "$slot" "verifiedbootstate" "$vbs" "veritymode" "${vm:-?}" \
-        "bootloader" "$ds" "OEM unlocking allowed" "$oem"
-      [ "$oem" = 1 ] && avb_mark oem-unlock-allowed || warn "OEM unlocking is OFF – turn it on (Developer options) before ANY lock"
+        "dm-verity /system" "${pv:-off}" "bootloader" "${ds:-?}" \
+        "OEM unlocking allowed" "${oem:-? (checked in fastboot before locking)}"
+      if [ "$oem" = 1 ]; then avb_mark oem-unlock-allowed
+      elif [ "$oem" = 0 ]; then warn "OEM unlocking is OFF – turn it on (Developer options) before ANY lock"
+      fi
       # Root must be gone (old KernelSU installs / su): root tools may change
       # partitions or vbmeta, a locked bootloader would then refuse to boot.
       local root ksu
       root=$(adb shell getprop ro.noxis.root | tr -d '\r')
-      ksu=$(adb shell 'ls /data/adb/ksud /data/adb/modules 2>/dev/null; command -v su' 2>/dev/null | tr -d '\r')
+      # adb shell returns the remote exit code (ls/command -v fail when nothing
+      # is there) - must not stop the script.
+      ksu=$( { adb shell 'ls -d /data/adb/ksud /data/adb/modules 2>/dev/null; command -v su' 2>/dev/null || true; } | tr -d '\r')
       printf '    %-22s %s\n' "root" "${root:-?}${ksu:+ (KernelSU/su found)}"
       if [ "$root" = 0 ] && [ -z "$ksu" ]; then
         avb_mark no-root
@@ -1484,7 +1494,6 @@ EOF
       sum=$(sha256sum "$pk" | cut -d' ' -f1); rm -f "$pk"
       avb_has verified-boot-ok || die "Verified boot not confirmed – ./noxis.sh avb test + status"
       [ "$(cat "$AVB_STATE/custom-key" 2>/dev/null)" = "$sum" ] || die "avb_custom_key not flashed with the current key – ./noxis.sh avb key"
-      avb_has oem-unlock-allowed || die "OEM unlocking not confirmed ON – turn it on, then ./noxis.sh avb status"
       avb_has no-root || die "Root (su / KernelSU) found on the phone – install the current Noxis (no root) with a factory reset, then ./noxis.sh avb status"
       cat <<EOF
 
@@ -1497,8 +1506,16 @@ EOF
    - NEVER lose $KEYS – without avb.pem no update will ever boot again.
 
 EOF
-      read -rp "Type LOCK to continue: " a; [ "$a" = LOCK ] || exit 0
       avb_to_bootloader
+      # The bootloader itself says whether "OEM unlocking" is on - the way back.
+      local ability; ability=$(fastboot flashing get_unlock_ability 2>&1 | sed -n 's/.*get_unlock_ability: *\([0-9]\).*/\1/p')
+      if [ "$ability" != 1 ]; then
+        fastboot reboot >/dev/null 2>&1 || true
+        die "OEM unlocking is not ON (get_unlock_ability=${ability:-?}) – turn it on in Developer options. NOT locked."
+      fi
+      c "OEM unlocking: on (bootloader confirms) – the way back stays open"
+      read -rp "Type LOCK to continue: " a
+      if [ "$a" != LOCK ]; then fastboot reboot >/dev/null 2>&1 || true; exit 0; fi
       avb_mark locked
       c "fastboot flashing lock – confirm on the phone with the volume keys + power"
       fastboot flashing lock
