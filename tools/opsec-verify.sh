@@ -80,17 +80,15 @@ want_any "Tor"            TorBrowser Tor
 want_any "Browser"        IronFox
 want_any "Camera"         NoxisCamera GrapheneCamera Camera
 want_any "Noxis Guard"    NoxisGuard
-# KernelSU only in root builds (ro.noxis.root=1); NOXIS_ROOT := 0 has no root at all
-if grep -rqs "^ro.noxis.root=0" "$PROD"/system_ext/etc/build.prop "$PROD"/system/system_ext/etc/build.prop "$SYS"/build.prop 2>/dev/null; then
-  if [ -n "$(find "$PROD" -iname 'KernelSU*.apk' 2>/dev/null | head -1)" ]; then
-    bad "KernelSU manager in a build without root (NOXIS_ROOT := 0)"
-  elif [ -f "$PROD/kernel" ] && LC_ALL=C grep -aq "KernelSU" "$PROD/kernel"; then
-    bad "Kernel still contains KernelSU although NOXIS_ROOT := 0"
-  else
-    ok "No root (NOXIS_ROOT := 0) – no KernelSU manager"
-  fi
+# No root in Noxis: no KernelSU manager, no KernelSU in the kernel, no su
+if [ -n "$(find "$PROD" -iname 'KernelSU*.apk' 2>/dev/null | head -1)" ]; then
+  bad "KernelSU manager in the image (Noxis has no root)"
+elif [ -f "$PROD/kernel" ] && LC_ALL=C grep -aq "KernelSU" "$PROD/kernel"; then
+  bad "Kernel contains KernelSU (Noxis has no root)"
+elif [ -e "$SYS/xbin/su" ] || [ -e "$SYS/bin/su" ]; then
+  bad "su binary in the image (Noxis has no root)"
 else
-  want_any "KernelSU manager" KernelSU
+  ok "No root – no KernelSU, no su"
 fi
 
 # ---------------------------------------------------------------- 3. bootloader stays unlockable

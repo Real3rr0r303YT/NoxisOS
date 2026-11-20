@@ -41,7 +41,6 @@ case "\$*" in
   *"%{url_effective}"*releases/latest*) echo "https://github.com/x/y/releases/tag/71" ;;
   *GrapheneOS/Camera/releases/expanded_assets*)    echo '<a href="/GrapheneOS/Camera/releases/download/71/Camera-71.apk">' ; echo '<a href="/GrapheneOS/Camera/releases/download/71/Camera-71.apk.idsig">' ;;
   *GrapheneOS/PdfViewer/releases/expanded_assets*) echo '<a href="/GrapheneOS/PdfViewer/releases/download/71/PdfViewer-33.apk">' ;;
-  *tiann/KernelSU/releases/expanded_assets/v3.3.1*) echo '<a href="/tiann/KernelSU/releases/download/v3.3.1/KernelSU_v3.3.1_32703-release.apk">'; echo '<a href="/tiann/KernelSU/releases/download/v3.3.1/ksud-aarch64-linux-android">' ;;
   *dist.torproject.org/torbrowser/) echo '<a href="16.0a14/">a</a> <a href="16.0/">b</a> <a href="15.0.9/">c</a> <a href="noscript/">n</a>' ;;
   *-o*) out=\$(echo "\$*" | sed 's/.*-o \([^ ]*\).*/\1/'); echo APK > "\$out" ;;
 esac
@@ -63,7 +62,7 @@ find "$NOXIS/vendor/noxis/prebuilt" -delete 2>/dev/null
 ./noxis.sh sync > "$W/sync.out" 2>&1;                    ok "sync" "grep -q 'Noxis product included' $W/sync.out && grep -q 'repo init -u https://github.com/LineageOS/android.git -b lineage-24.0' $LOG"
 ok "local manifest kopiert" "[ -f $NOXIS_SRC/.repo/local_manifests/noxis.xml ]"
 ok "vendor/noxis im Baum" "[ -f $NOXIS_SRC/vendor/noxis/packages/NoxisGuard/Android.bp ]"
-ok "KernelSU im Kernel-Config" "grep -q '^    vendor/asteroids_ksu.config' $NOXIS_SRC/device/nothing/asteroids/BoardConfig.mk"
+ok "kein KernelSU im Kernel-Config" "! grep -q 'asteroids_ksu.config' $NOXIS_SRC/device/nothing/asteroids/BoardConfig.mk"
 ok "dm-verity bleibt an (Standard)" "grep -q 'BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS :=\$' $NOXIS_SRC/vendor/noxis/config/BoardConfigNoxis.mk"
 # --depth gehoert nur zum init. Echtes repo lehnt es beim sync ab ("no such
 # option"), die Attrappe hier schluckt jedes Argument - deshalb ist der
@@ -77,12 +76,12 @@ ok "apps: IronFox is the browser" "grep -q IronFox vendor/noxis/config/noxis.mk 
 ok "apps: Termux after flashing" "grep -q 'install_post Termux' noxis.sh"
 ok "apps: F-Droid + Aurora" "grep -q 'install_apk FDroid' noxis.sh && grep -q 'install_apk AuroraStore' noxis.sh && grep -q AuroraStore vendor/noxis/config/noxis.mk"
 ok "guard: virus scan" "[ -f vendor/noxis/packages/NoxisGuard/src/com/noxis/guard/Scanner.java ] && grep -q noxis_av_android_sha256.idx vendor/noxis/config/noxis.mk && grep -q install_avdb noxis.sh"
-ok "ksu modules: NoxisSpoof" "[ -f ksu-modules/NoxisSpoof/module.prop ] && grep -q build_ksu_modules noxis.sh"
+ok "kein Root: kein KernelSU im Script" "! grep -qE 'cmd_ksu|build_ksu_modules|ksu_pin' noxis.sh && [ ! -d ksu-modules ]"
 ok "apps: no NoxisLauncher" "! grep -q NoxisLauncher vendor/noxis/config/noxis.mk"
 ok "apps: Android.bp erzeugt" "grep -q 'name: \"GraphenePdfViewer\"' vendor/noxis/prebuilt/GraphenePdfViewer/Android.bp"
 ok "apps: Mullvad + Tor (aarch64, neueste stabile)" "[ -f vendor/noxis/prebuilt/MullvadVPN/MullvadVPN.apk ] && grep -q 'torbrowser/16.0/tor-browser-android-aarch64-16.0.apk' $W/apps.out"
-ok "apps: KernelSU-Manager v3.3.1 (passend zum Kernel)" "[ -f vendor/noxis/prebuilt/KernelSU/KernelSU.apk ] && grep -q 'KernelSU_v3.3.1_32703-release.apk' $W/apps.out"
-ok "apps: alle Apps im Produkt" "grep -q 'PRODUCT_PACKAGES += KernelSU' vendor/noxis/config/noxis.mk && grep -q 'PRODUCT_PACKAGES += TorBrowser' vendor/noxis/config/noxis.mk"
+ok "apps: kein KernelSU-Manager" "[ ! -e vendor/noxis/prebuilt/KernelSU ]"
+ok "apps: alle Apps im Produkt" "! grep -q KernelSU vendor/noxis/config/noxis.mk && grep -q 'PRODUCT_PACKAGES += TorBrowser' vendor/noxis/config/noxis.mk"
 ok "apps: Jelly durch Firefox ersetzt" "! grep -q '    Jelly' $NOXIS_SRC/vendor/lineage/config/common.mk"
 ./noxis.sh build > "$W/b0.out" 2>&1;                     ok "build ohne Blobs bricht ab" "grep -q 'Run ./noxis.sh blobs' $W/b0.out"
 echo zip > "$W/ota.zip"

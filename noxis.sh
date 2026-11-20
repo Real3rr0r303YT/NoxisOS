@@ -7,22 +7,20 @@
 #
 #  ./noxis.sh check              Check the PC (RAM, disk, tools)
 #  ./noxis.sh sync               Fetch the source (--depth=1, ~110 GB) + add Noxis
-#  ./noxis.sh apps               Own apps, IronFox, F-Droid, Aurora, Termux, ClamAV DB, KSU modules, Mullvad, Tor, KernelSU manager
+#  ./noxis.sh apps               Own apps, IronFox, F-Droid, Aurora, Termux, microG, ClamAV DB, Mullvad, Tor
 #  ./noxis.sh blobs <ota|dump>   Extract the vendor files from a Nothing OS OTA or dump
 #  ./noxis.sh blobs <ota> --regen
 #                                Same, but rewrite the file list from the dump -
 #                                needed when the dump is a different Nothing OS
 #                                version than the device tree expects
 #  ./noxis.sh keys               Create your own signing keys
-#  ./noxis.sh build              Compile (user build, KernelSU in the kernel)
+#  ./noxis.sh build              Compile (user build, no root)
 #  ./noxis.sh eta                How long the running build still needs (2nd terminal)
-#  ./noxis.sh overlayfix [Name]  Changed overlays onto the phone as KernelSU module, no build
 #  ./noxis.sh opsec              Check the built image against the OPSEC rules
 #  ./noxis.sh sign               Sign → OTA + images → Desktop (out/ stays)
 #  ./noxis.sh cleanup            ROM to the Desktop (NOXIS_KEEP_OUT=0 also deletes out/)
 #  ./noxis.sh flash              Install on the phone (guided, bootloader stays unlocked)
 #  ./noxis.sh postinstall        After the first boot: Termux/Tor/... via adb
-#  ./noxis.sh ksu                KernelSU manager matching the kernel (installs via adb)
 #  ./noxis.sh publish            Upload the OTA as a GitHub release → phone: Settings → System → Updater
 #  ./noxis.sh avb <step>         Verified boot + locking the bootloader: test, status, log,
 #                                restore, key, lock (each step checks the one before)
@@ -52,12 +50,6 @@ DEVICE="asteroids"
 if [ "${NOXIS_DEBUG:-0}" = 1 ]; then VARIANT="${NOXIS_VARIANT:-userdebug}"; else VARIANT="${NOXIS_VARIANT:-user}"; fi
 export NOXIS_DEBUG="${NOXIS_DEBUG:-0}"
 SUBJECT="${NOXIS_SUBJECT:-/C=DE/O=Noxis OS/OU=Noxis/CN=Noxis OS}"
-# KernelSU: the kernel tree brings its own copy (crDroid, often an unreleased
-# main-branch state). By default it is replaced with this official release,
-# so kernel and the officially signed manager of the same release match
-# exactly. NOXIS_KSU_PIN=none keeps the kernel tree's own copy.
-KSU_PIN="${NOXIS_KSU_PIN:-v3.3.1}"
-KSU_TAG="${NOXIS_KSU_TAG:-}"   # empty = the pinned release, or the one matching the kernel
 # Old (German) variable names keep working
 NOXIS_OTHER_FIRMWARE="${NOXIS_OTHER_FIRMWARE:-${NOXIS_ANDERER_STAND:-0}}"
 
@@ -150,43 +142,14 @@ cmd_postinstall() {
   need adb "install android-tools"
   # old folder name from earlier versions
   [ -d "$NOXIS/nachinstallieren" ] && { mkdir -p "$POST"; mv -n "$NOXIS/nachinstallieren"/*.apk "$POST"/ 2>/dev/null || true; }
-  compgen -G "$POST/*.apk" >/dev/null || compgen -G "$POST/modules/*.zip" >/dev/null \
-    || { c "Nothing to install"; return 0; }
+  compgen -G "$POST/*.apk" >/dev/null || { c "Nothing to install"; return 0; }
   c "Connect the phone with USB debugging (Settings → Developer options)"
   adb wait-for-device
-  local a z
+  local a
   for a in "$POST"/*.apk; do
     [ -f "$a" ] || continue
     c "installing $(basename "$a" .apk)"
     adb install -r "$a" || warn "$(basename "$a") failed"
-  done
-  # KernelSU modules: copy to Download, then install with root. adb shell
-  # only gets root after you allow "Shell" in the KernelSU app once - and
-  # after a fresh install / factory reset /data/adb/ksud only exists once the
-  # KernelSU app has been opened. So wait for that instead of failing.
-  if compgen -G "$POST/modules/*.zip" >/dev/null; then
-    local try=0
-    until adb shell "su -c 'test -x /data/adb/ksud'" >/dev/null 2>&1; do
-      try=$((try + 1))
-      [ "$try" -le 3 ] || { warn "Still no root for adb – modules skipped"; break; }
-      adb shell monkey -p me.weishu.kernelsu -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-      c "KernelSU modules need root for adb once. On the phone:
-       1. The KernelSU app is opening (if not: open it) – wait until it shows \"Working\"
-       2. KernelSU → Superuser → Shell (com.android.shell) → allow
-       3. If a root request pops up for Shell: allow"
-      read -rp "   Done? Press Enter (Ctrl+C to skip the modules) " _ || true
-    done
-  fi
-  for z in "$POST"/modules/*.zip; do
-    [ -f "$z" ] || continue
-    adb push "$z" "/sdcard/Download/$(basename "$z")" >/dev/null
-    if adb shell "su -c '/data/adb/ksud module install /sdcard/Download/$(basename "$z")'" ; then
-      c "KernelSU module $(basename "$z" .zip) installed – reboot the phone"
-    else
-      warn "KernelSU module $(basename "$z" .zip): no root for adb.
-       Either: KernelSU app → Superuser → Shell → allow, then ./noxis.sh postinstall again
-       Or:     KernelSU app → Modules → Install → Download/$(basename "$z")"
-    fi
   done
 }
 
@@ -398,20 +361,6 @@ install_avdb() {
   } > "$dir/Android.bp"
 }
 
-# Root modules (KernelSU) of Noxis: zipped into postinstall/modules/, the
-# phone gets them with ./noxis.sh postinstall.
-build_ksu_modules() {
-  local m name
-  need zip "install zip"
-  mkdir -p "$POST/modules"
-  for m in "$NOXIS"/ksu-modules/*/; do
-    [ -f "$m/module.prop" ] || continue
-    name=$(basename "$m")
-    rm -f "$POST/modules/$name.zip"
-    ( cd "$m" && zip -qr9 "$POST/modules/$name.zip" . )
-    c "KernelSU module $name → installed after flashing (./noxis.sh postinstall)"
-  done
-}
 
 # IronFox: Firefox fork with uBlock Origin preinstalled and hardened defaults,
 # signed by the IronFox project. Newest arm64 build from their F-Droid repo.
@@ -467,133 +416,17 @@ EOF
   fi
 }
 
-# KernelSU manager and kernel must speak the same interface version (UAPI),
-# otherwise the app shows "Manager update required" / "Kernel update
-# required". The kernel tree brings its own KernelSU copy, so read its UAPI
-# version and take the newest official release with the same one.
-ksu_kernel_uapi() {
-  local h
-  for h in $(grep -rls "KERNEL_SU_UAPI_VERSION *=" "$SRC"/kernel/nothing/sm7635/KernelSU "$SRC"/kernel/nothing/sm7635/drivers/kernelsu 2>/dev/null || true); do
-    sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' "$h" | head -1
-    return 0
-  done
-  return 0
-}
 
-ksu_release_uapi() {  # <tag> → UAPI version of that release (empty if unknown)
-  local p v
-  for p in uapi/supercall.h kernel/uapi/supercall.h kernel/supercalls.h kernel/ksu.h; do
-    v=$( { curl -fsSL --max-time 30 "https://raw.githubusercontent.com/tiann/KernelSU/$1/$p" 2>/dev/null || true; } \
-         | sed -n 's/.*KERNEL_SU_UAPI_VERSION *= *\([0-9]*\).*/\1/p' | head -1)
-    [ -n "$v" ] && { echo "$v"; return 0; }
-  done
-  return 0
-}
 
-ksu_tag() {
-  [ -n "$KSU_TAG" ] && { echo "$KSU_TAG"; return 0; }
-  [ "$KSU_PIN" != none ] && { echo "$KSU_PIN"; return 0; }
-  local want tag have tags
-  want=$(ksu_kernel_uapi)
-  if [ -z "$want" ]; then
-    warn "KernelSU UAPI version of the kernel not found – taking the newest manager"
-    curl -fsSIL -o /dev/null -w '%{url_effective}' https://github.com/tiann/KernelSU/releases/latest | sed 's,.*/tag/,,'
-    return 0
-  fi
-  c "KernelSU in the kernel: UAPI $want" >&2
-  tags=$( { curl -fsSL --max-time 60 "https://api.github.com/repos/tiann/KernelSU/releases?per_page=15" || true; } \
-          | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
-  [ -n "$tags" ] || { warn "GitHub API not reachable"; return 0; }
-  for tag in $tags; do
-    have=$(ksu_release_uapi "$tag")
-    c "  $tag: UAPI ${have:-?}" >&2
-    if [ "$have" = "$want" ]; then
-      c "KernelSU manager → $tag" >&2
-      echo "$tag"; return 0
-    fi
-    # releases are newest first: once a release is older than the kernel,
-    # no older one can match either
-    if [ -n "$have" ] && [ "$have" -lt "$want" ]; then
-      # The kernel carries a KernelSU that is newer than every release (from
-      # the main branch). KernelSU's CI builds main with the official signing
-      # key, so that manager is accepted by the kernel and speaks its UAPI.
-      warn "The kernel's KernelSU is newer than the newest release – using the official main-branch build"
-      echo "main"; return 0
-    fi
-  done
-  warn "No KernelSU release with UAPI $want – set one with NOXIS_KSU_TAG=vX.Y.Z or NOXIS_KSU_TAG=main"
-  return 0
-}
 
-# Download the KernelSU manager for a tag (or "main" = official CI build of
-# the main branch, via nightly.link because GitHub artifacts need a login).
-ksu_download() {  # <tag> <target.apk>
-  local tag="$1" out="$2" url tmp
-  if [ "$tag" = main ]; then
-    tmp=$(mktemp -d)
-    url="https://nightly.link/tiann/KernelSU/workflows/build-manager/main/manager-gradle.zip"
-    c "KernelSU manager ← $url"
-    curl -fL --progress-bar --max-time 900 -o "$tmp/m.zip" "$url" || { rm -rf "$tmp"; return 1; }
-    unzip -q -o "$tmp/m.zip" -d "$tmp" && ls "$tmp"/*.apk >/dev/null 2>&1 || { rm -rf "$tmp"; return 1; }
-    mv -f "$(ls "$tmp"/*.apk | head -1)" "$out"; rm -rf "$tmp"
-  else
-    url=$(gh_tag_asset tiann/KernelSU "$tag" 'KernelSU.*\.apk$' || true)
-    [ -n "$url" ] || return 1
-    c "KernelSU manager ← $url"
-    curl -fL --progress-bar --max-time 900 -o "$out" "$url" || return 1
-  fi
-}
 
-# Replace the kernel tree's KernelSU copy with the official release KSU_PIN.
-# The source comes as a tarball (no .git), so KernelSU's Kbuild would fall
-# back to version 16 - the version number is written in from the release's
-# manager APK name (KernelSU_v3.3.1_32703-release.apk → 32703).
-ksu_pin() {
-  # NOXIS_ROOT := 0: KernelSU is not built at all (config fragment removed by
-  # noxis_patch.py), so the source copy does not matter - say so instead.
-  if ! noxis_root; then c "No root (NOXIS_ROOT := 0): KernelSU is NOT built into the kernel"; return 0; fi
-  [ "$KSU_PIN" = none ] && return 0
-  local dir="$SRC/kernel/nothing/sm7635/KernelSU" mark tmp ver
-  [ -d "$dir" ] || { warn "KernelSU: $dir missing – kernel not synced?"; return 0; }
-  mark="$dir/.noxis-pin"
-  [ "$(cat "$mark" 2>/dev/null)" = "$KSU_PIN" ] && { c "KernelSU in the kernel: $KSU_PIN"; return 0; }
-  ver=$(gh_tag_asset tiann/KernelSU "$KSU_PIN" 'KernelSU.*\.apk$' | sed -n 's/.*_\([0-9]\{5\}\)-release\.apk$/\1/p')
-  [ -n "$ver" ] || die "KernelSU $KSU_PIN: version number not found (release missing?)"
-  c "KernelSU in the kernel → official $KSU_PIN (version $ver)"
-  tmp=$(mktemp -d)
-  curl -fsSL --max-time 600 "https://github.com/tiann/KernelSU/archive/refs/tags/$KSU_PIN.tar.gz" \
-    | tar -xz -C "$tmp" --strip-components=1 || { rm -rf "$tmp"; die "KernelSU $KSU_PIN: download failed"; }
-  [ -f "$tmp/kernel/Kbuild" ] || { rm -rf "$tmp"; die "KernelSU $KSU_PIN: unexpected archive"; }
-  sed -i "s/-DKSU_VERSION=16/-DKSU_VERSION=$ver/" "$tmp/kernel/Kbuild"
-  grep -q "DKSU_VERSION=$ver" "$tmp/kernel/Kbuild" || { rm -rf "$tmp"; die "KernelSU: version line not found in Kbuild"; }
-  find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-  cp -a "$tmp/." "$dir/"
-  echo "$KSU_PIN" > "$mark"
-  rm -rf "$tmp"
-}
 
-# Only the KernelSU manager: download the matching one and, if the phone is
-# connected with USB debugging, install it right away (updates the old one).
-cmd_ksu() {
-  noxis_root || die "This build has no root (NOXIS_ROOT := 0 in vendor/noxis/config/noxis.mk)"
-  need curl "install curl"; need unzip "install unzip"
-  local tag
-  tag=$(ksu_tag); [ -n "$tag" ] || die "no matching KernelSU manager"
-  mkdir -p "$POST"
-  ksu_download "$tag" "$POST/KernelSU.apk" || die "KernelSU $tag: download failed"
-  if command -v adb >/dev/null && [ "$(adb get-state 2>/dev/null)" = device ]; then
-    adb install -r "$POST/KernelSU.apk" && c "KernelSU manager ($tag) installed"
-  else
-    c "Phone not connected – later: ./noxis.sh postinstall"
-  fi
-}
 
 # ------------------------------------------------------------ 3rr0r's own apps (built by GitHub Actions)
 # name → LineageOS app it replaces (empty = added next to the stock app)
 NOXIS_APPS_REPO="${NOXIS_APPS_REPO:-Real3rr0r303YT/NoxisOS}"
 # Privileged own apps (their privileged permissions are allowlisted in
-# vendor/noxis/permissions/privapp-permissions-noxis-product.xml) - the same
-# as the priv-app KernelSU module of the app's repository.
+# vendor/noxis/permissions/privapp-permissions-noxis-product.xml).
 NOXIS_PRIV_APPS="NoxisCall"
 NOXIS_OWN_APPS="NoxisCalendar:Etar NoxisClock:DeskClock NoxisCalculator:ExactCalculator NoxisNotes: NoxisCall: NoxisBattery: NoxisCamera:Aperture"
 
@@ -676,28 +509,8 @@ cmd_apps() {
   install_apk TorBrowser        "$(tor_url)" false
   # Virus signatures for Noxis Guard (ClamAV, Android malware only)
   install_avdb
-  if ! noxis_root; then
-    # NOXIS_ROOT := 0 - no KernelSU: no manager, no modules (also not leftovers)
-    rm -rf "$NOXIS/vendor/noxis/prebuilt/KernelSU" "$POST/modules" "$POST"/KernelSU*.apk
-    c "No root (NOXIS_ROOT := 0): KernelSU manager and modules left out"
-    [ -d "$SRC/vendor" ] && cmd_vendor
-    return 0
-  fi
-  # KernelSU modules from ksu-modules/ → installed after flashing
-  build_ksu_modules
-  # The manager has to match the KernelSU in the kernel and be officially signed
-  local kt; kt=$(ksu_tag)
-  if [ "$kt" = main ]; then
-    # CI build: download, then register it like the other prebuilts
-    mkdir -p "$NOXIS/vendor/noxis/prebuilt/KernelSU"
-    if ksu_download main "$NOXIS/vendor/noxis/prebuilt/KernelSU/KernelSU.apk"; then
-      install_apk_bp KernelSU false
-    else
-      warn "KernelSU manager: download failed – skipped"
-    fi
-  else
-    install_apk KernelSU "$(gh_tag_asset tiann/KernelSU "$kt" 'KernelSU.*\.apk$' || true)" false
-  fi
+  # Noxis has no root: remove KernelSU manager / modules left from older versions
+  rm -rf "$NOXIS/vendor/noxis/prebuilt/KernelSU" "$POST/modules" "$POST"/KernelSU*.apk
   [ -d "$SRC/vendor" ] && cmd_vendor
   return 0
 }
@@ -887,7 +700,6 @@ cmd_build() {
   fi
   apks_check
   lfs_check
-  ksu_pin
   zram_on
   envsetup
   # ccache is off: on the first build the cache is empty and does not help,
@@ -946,12 +758,6 @@ cmd_opsec() {
   NOXIS_POSTINSTALL="$POST" "$NOXIS/tools/opsec-verify.sh" "$prod"
 }
 
-# ------------------------------------------------------------ sign
-# NOXIS_ROOT := 0/1 from noxis.mk (default 1): KernelSU or no root at all
-noxis_root() {
-  local r; r=$(sed -n 's/^NOXIS_ROOT *:= *\([01]\).*/\1/p' "$NOXIS/vendor/noxis/config/noxis.mk" 2>/dev/null)
-  [ "${r:-1}" = 1 ]
-}
 
 noxis_version() {  # single source: vendor/noxis/config/noxis.mk
   sed -n 's/^NOXIS_VERSION := //p' "$NOXIS/vendor/noxis/config/noxis.mk" | head -n1
@@ -1333,13 +1139,10 @@ EOF
 
   After that:
    1. Set up the phone, then Developer options → USB debugging on
-      → on the PC: ./noxis.sh postinstall   (Mullvad, Tor Browser, KernelSU manager)
-   2. Open the KernelSU app → shows "Working" + kernel version.
-   3. Root is blocked for ALL apps. Grant it only one by one:
-      KernelSU → Superuser → tap the app → allow root.
-   4. Open Mullvad and log in – there is no internet before that (kill switch).
-   5. The bootloader STAYS unlocked – do NOT run "fastboot flashing lock",
-      that makes the device unbootable with Noxis OS.
+      → on the PC: ./noxis.sh postinstall   (Termux, Mullvad, Tor Browser, IronFox, microG)
+   2. Open Mullvad and log in – there is no internet before that (kill switch).
+   3. Do NOT run "fastboot flashing lock" by hand. Locking only with the
+      guarded steps: ./noxis.sh avb test → status → key → lock
 
   Boot hangs for more than 15 minutes: hold Volume down + Power 15 s → fastboot.
   Going back to Nothing OS always works (the bootloader stays unlocked).
@@ -1619,8 +1422,8 @@ EOF
       printf '    %-22s %s\n' "slot" "$slot" "verifiedbootstate" "$vbs" "veritymode" "${vm:-?}" \
         "bootloader" "$ds" "OEM unlocking allowed" "$oem"
       [ "$oem" = 1 ] && avb_mark oem-unlock-allowed || warn "OEM unlocking is OFF – turn it on (Developer options) before ANY lock"
-      # Root must be gone: KernelSU modules may change partitions/vbmeta, a locked
-      # bootloader would then refuse to boot.
+      # Root must be gone (old KernelSU installs / su): root tools may change
+      # partitions or vbmeta, a locked bootloader would then refuse to boot.
       local root ksu
       root=$(adb shell getprop ro.noxis.root | tr -d '\r')
       ksu=$(adb shell 'ls /data/adb/ksud /data/adb/modules 2>/dev/null; command -v su' 2>/dev/null | tr -d '\r')
@@ -1629,7 +1432,7 @@ EOF
         avb_mark no-root
       else
         rm -f "$AVB_STATE/no-root"
-        warn "Root present – build with NOXIS_ROOT := 0 and flash it with a factory reset before locking"
+        warn "Root present – install the current Noxis (no root) with a factory reset before locking"
       fi
       if [ "$vm" = enforcing ]; then
         avb_mark verified-boot-ok "$slot $(date -u +%FT%TZ)"
@@ -1640,10 +1443,17 @@ EOF
       ;;
     log)
       adb_ready || die "No phone via adb"
+      # No root: the bug report (dumpstate runs as root) contains the kernel
+      # log of the previous boot ("LAST KMSG" / pstore console-ramoops).
+      local tmp; tmp=$(mktemp -d)
+      c "Collecting a bug report (1–3 minutes, phone stays usable) …"
+      adb bugreport "$tmp/br.zip" >/dev/null 2>&1 || { rm -rf "$tmp"; die "adb bugreport failed"; }
+      unzip -q -o "$tmp/br.zip" 'bugreport-*.txt' -d "$tmp" 2>/dev/null || true
       c "Kernel/init log of the last (failed) boot:"
-      adb shell "su -c 'cat /sys/fs/pstore/console-ramoops* /sys/fs/pstore/pmsg-ramoops* 2>/dev/null'" \
-        | tr -d '\r' | grep -aiE "init: |avb|verity|fs_mgr|dm-|vbmeta|panic|reboot|fail" | tail -n 80 \
-        || warn "No pstore log (root for Shell in KernelSU allowed?)"
+      awk '/^------ (LAST KMSG|.*pstore|.*ramoops)/{p=1;next} /^------ /{p=0} p' "$tmp"/bugreport-*.txt 2>/dev/null \
+        | grep -aiE "init: |avb|verity|fs_mgr|dm-|vbmeta|panic|reboot|fail" | tail -n 80 \
+        || warn "No kernel log of the previous boot in the bug report"
+      rm -rf "$tmp"
       ;;
     restore)
       local img tmp slot; img=$(latest img.zip); [ -f "$img" ] || die "No ROM in $REL"
@@ -1675,11 +1485,11 @@ EOF
       avb_has verified-boot-ok || die "Verified boot not confirmed – ./noxis.sh avb test + status"
       [ "$(cat "$AVB_STATE/custom-key" 2>/dev/null)" = "$sum" ] || die "avb_custom_key not flashed with the current key – ./noxis.sh avb key"
       avb_has oem-unlock-allowed || die "OEM unlocking not confirmed ON – turn it on, then ./noxis.sh avb status"
-      avb_has no-root || die "Root (KernelSU) found on the phone – locking only with a build without root (NOXIS_ROOT := 0), then ./noxis.sh avb status"
+      avb_has no-root || die "Root (su / KernelSU) found on the phone – install the current Noxis (no root) with a factory reset, then ./noxis.sh avb status"
       cat <<EOF
 
   LOCK THE BOOTLOADER
-   - ALL DATA ON THE PHONE IS ERASED (photos, apps, KernelSU modules).
+   - ALL DATA ON THE PHONE IS ERASED (photos, apps, everything).
    - Keep "OEM unlocking" ON in Developer options: that is your way back
      (fastboot flashing unlock) if anything goes wrong.
    - From now on every ./noxis.sh sign builds with verified boot ON
@@ -1715,8 +1525,6 @@ case "${1:-}" in
   sign)   cmd_sign ;;
   flash)  cmd_flash ;;
   postinstall|nachinstall) cmd_postinstall ;;
-  ksu)    cmd_ksu ;;
-  overlayfix) noxis_root || die "overlayfix needs KernelSU (NOXIS_ROOT := 1)"; shift; bash "$NOXIS/tools/noxis_rro_hotfix.sh" "$NOXIS" "$SRC" "$KEYS" "$@" ;;
   eta)    python3 "$NOXIS/tools/noxis_eta.py" "$SRC/out" --every 30 ;;
   direct|direkt) cmd_direct ;;
   sysextfix) cmd_sysextfix ;;
@@ -1725,5 +1533,5 @@ case "${1:-}" in
   avb)     shift; cmd_avb "$@" ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '5,34p' "$0" ;;
+  *) sed -n '5,32p' "$0" ;;
 esac

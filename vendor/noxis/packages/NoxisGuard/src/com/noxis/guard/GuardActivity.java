@@ -198,8 +198,6 @@ public class GuardActivity extends Activity {
 
     private void links() {
         header("Weitere Schutzbereiche");
-        link("Root-Freigaben (KernelSU)", "Welche Apps Root bekommen – Standard: keine",
-                getPackageManager().getLaunchIntentForPackage("me.weishu.kernelsu"));
         link("Netzwerkzugriff pro App", "App antippen → Mobile Daten & WLAN → Netzwerkzugriff",
                 new Intent(Settings.ACTION_APPLICATION_SETTINGS));
         link("Standard-Apps (Browser, Telefon)", "Empfohlen: IronFox als Browser, NothingCall als Telefon",

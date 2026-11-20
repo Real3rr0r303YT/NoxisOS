@@ -1,6 +1,6 @@
 # ============================================================
 #  Noxis OS – Board-Konfiguration (am Ende von BoardConfig.mk eingebunden)
-#  Modell: offener Bootloader + KernelSU (Root nur pro freigegebener App)
+#  Modell: kein Root, Verified Boot mit eigenem Schlüssel (Bootloader sperrbar)
 # ============================================================
 
 # Kernel-Härtung (GrapheneOS-ähnlich)
@@ -12,7 +12,6 @@ BOARD_KERNEL_CMDLINE += \
     randomize_kstack_offset=on
 
 # dm-verity bleibt an: System-, Vendor- und Produkt-Partition werden beim Lesen geprüft.
-# KernelSU-Module arbeiten per Overlay und brauchen kein abgeschaltetes Verity.
 # Notfall-Schalter, falls es auf dem Gerät Probleme gibt:  NOXIS_DISABLE_VERITY=true
 ifeq ($(NOXIS_DISABLE_VERITY),true)
 BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS := --flags 3

@@ -4,12 +4,11 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 
 ## 1.4
 
-- **No root by default (`NOXIS_ROOT := 0`):** no KernelSU in the kernel, no manager, no modules – the requirement for verified boot. `NOXIS_ROOT := 1` brings KernelSU back.
+- **No root, only OPSEC:** KernelSU removed completely – not in the kernel, no manager, no modules, no `su`. The module NoxisSpoof and `./noxis.sh overlayfix` / `./noxis.sh ksu` are gone. `./noxis.sh apps` deletes old KernelSU leftovers. Requirement for verified boot. **Before updating:** remove all KernelSU modules on the phone.
 - **`./noxis.sh avb`**: guarded path to verified boot and a locked bootloader with your own key (test → status → key → lock); refuses to lock while root is on the phone.
 - **Google services in the app sandbox:** microG (Services + Companion) as normal user apps via postinstall – LineageOS 24 only accepts microG's official signature for this. `NOXIS_MICROG=0` skips it.
 - **Duress PIN (like GrapheneOS):** Noxis Guard → Notfall-PIN. A second PIN that factory-resets the phone when entered on the lock screen. Hash only, never equal to the real PIN, a bug can only disable it – never lock you out.
 - **Widgets** in all own apps: clock, battery, calendar, notes, favourites (phone), calculator, camera – Nothing dot-matrix style.
-- **`./noxis.sh avb`**: guarded path to verified boot and a locked bootloader with your own key (test → status → key → lock).
 
 ## 1.3
 

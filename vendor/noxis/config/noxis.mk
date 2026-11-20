@@ -4,16 +4,15 @@
 # ============================================================
 NOXIS_VERSION := 1.4
 NOXIS_PATH := vendor/noxis
-# Root: 1 = KernelSU in the kernel + manager + modules; 0 = no root at all
-# (needed for verified boot / a locked bootloader). Read by noxis.sh and
-# tools/noxis_patch.py too.
-NOXIS_ROOT := 0
+# No root at all: no root manager in the kernel, no su - the requirement for
+# verified boot and a locked bootloader (tools/noxis_patch.py removes the
+# device tree's root kernel config).
 
 # Identität
 PRODUCT_SYSTEM_EXT_PROPERTIES += \
     ro.noxis.version=$(NOXIS_VERSION) \
     ro.noxis.device=asteroids \
-    ro.noxis.root=$(NOXIS_ROOT)
+    ro.noxis.root=0
 
 # Own OTA updates instead of LineageOS servers: Settings → System → Updater reads this JSON,
 # downloads the OTA from the GitHub release and checks it against your release key
@@ -60,10 +59,6 @@ endif
 ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/NoxisAvDb/android.names),)
 PRODUCT_PACKAGES += noxis_av_android_md5.idx noxis_av_android_sha1.idx noxis_av_android_sha256.idx \
     noxis_av_android.names noxis_av_VERSION
-endif
-# KernelSU-Manager: Root-Freigabe pro App (Kernel-Treiber steckt in kernel/nothing/sm7635/KernelSU)
-ifneq ($(wildcard $(NOXIS_PATH)/prebuilt/KernelSU/KernelSU.apk),)
-PRODUCT_PACKAGES += KernelSU
 endif
 
 # 3rr0r's own apps (Nothing design, built from source by the "Noxis apps" GitHub Action)

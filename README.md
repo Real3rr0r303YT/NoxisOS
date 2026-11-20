@@ -4,7 +4,7 @@
 
 <p align="center">
   Hardened Android for the <b>Nothing Phone (3a) / (3a) Pro</b> (<code>asteroids</code>, Snapdragon 7s Gen 3 / SM7635)<br>
-  LineageOS 24.0 base · Android 17 · no root by default (KernelSU optional) · offline virus scan · no Google
+  LineageOS 24.0 base · Android 17 · no root · offline virus scan · no Google
 </p>
 
 <p align="center">
@@ -31,12 +31,12 @@ Your phone, your rules. Noxis OS is built from source on LineageOS, signed with 
 | Google | Play services built in | not included – F-Droid + Aurora Store instead |
 | Telemetry | Nothing + Google | none |
 | Signing | Nothing's keys | **your own keys** |
-| Root | none | KernelSU, per app (default: every app denied) |
+| Root | none | **none** – OPSEC instead of root, verified boot with your own key |
 | Network | default | Mullvad killswitch, Tor, per-app firewall |
 | Malware | Google Play Protect | **Noxis Guard** – offline ClamAV signatures + trojan patterns |
 | Updates | Nothing's servers | your GitHub releases, A/B with automatic rollback |
 
-**Model:** no root by default (`NOXIS_ROOT := 0`) – the way to verified boot and a bootloader locked with your own key (`./noxis.sh avb`). With `NOXIS_ROOT := 1` in `vendor/noxis/config/noxis.mk` you get KernelSU in the kernel instead, root only for apps you allow one by one – then the bootloader must stay unlocked.
+**Model:** no root, only OPSEC – no KernelSU, no su, no root modules. That is the way to verified boot and a bootloader locked with your own key (`./noxis.sh avb`).
 
 ### Why now: Android developer verification (2027)
 
@@ -52,7 +52,8 @@ Note: this is about *apps*, not the bootloader. Unlocking depends on the phone m
 - **Private browsing** – IronFox (Firefox with uBlock Origin preinstalled) as default browser, Tor Browser, Mullvad VPN
 - **No Google, still apps** – F-Droid and Aurora Store (Play Store apps without an account) preinstalled, Termux after the first boot
 - **Own apps in Nothing design** – calendar, clock, calculator, notes, phone, battery
-- **KernelSU modules** – e.g. **NoxisSpoof** (apps see another phone model, switchable, *Off* = real device)
+- **No root** – nothing on the phone can change the system; verified boot + locked bootloader possible
+- **Duress PIN** and **microG** (Google services as normal sandboxed apps, optional)
 - **Fast like a flagship** – Settings, launcher, SystemUI and system_server compiled fully ahead of time, zram at 50 % of RAM (more apps stay open), 0.75x animations
 - **OTA updates from GitHub** – Settings → System → System updates
 
@@ -92,7 +93,7 @@ cd NoxisOS && ./noxis.sh flash                      # guided, phone in fastboot 
 The first boot takes **5–15 minutes** (encryption setup, app optimisation). Then:
 
 ```bash
-./noxis.sh postinstall    # USB debugging on – installs Termux, Tor Browser, KernelSU manager, KernelSU modules
+./noxis.sh postinstall    # USB debugging on – installs Termux, Tor Browser, Mullvad, IronFox, microG
 ```
 
 ### Updates
@@ -106,7 +107,7 @@ The first boot takes **5–15 minutes** (encryption setup, app optimisation). Th
 ```bash
 ./noxis.sh check                    # RAM ≥ 32 GB (or 16 GB + swap), ~150–300 GB free
 ./noxis.sh sync                     # LineageOS 24.0 (--depth=1) + Noxis manifest + patches
-./noxis.sh apps                     # own apps, IronFox, F-Droid, Aurora, Termux, Mullvad, Tor, KernelSU, ClamAV signatures, KSU modules
+./noxis.sh apps                     # own apps, IronFox, F-Droid, Aurora, Termux, Mullvad, Tor, microG, ClamAV signatures
 ./noxis.sh blobs ~/Downloads/Asteroids-OTA.zip   # full Nothing OS OTA (B4.1-260928-1204)
                                     #   other Nothing OS version / extracted dump: NOXIS_OTHER_FIRMWARE=1
 ./noxis.sh keys                     # your own signing keys → ~/.noxis-keys – BACK THEM UP
@@ -120,8 +121,6 @@ The first boot takes **5–15 minutes** (encryption setup, app optimisation). Th
 | Helper | Use |
 |---|---|
 | `./noxis.sh eta` | time left of the running build (second terminal) |
-| `./noxis.sh overlayfix [Name]` | changed overlays (e.g. `NoxisUpdaterOverlay`) onto the phone as KernelSU module – no build |
-| `./noxis.sh ksu` | install only the KernelSU manager that matches the kernel |
 | `./noxis.sh opsec` | check the built image against the OPSEC rules |
 
 Keep the PC awake during the build (Hyprland): `pkill hypridle; ./noxis.sh build; hypridle & disown`
@@ -143,8 +142,6 @@ Keep the PC awake during the build (Hyprland): `pkill hypridle; ./noxis.sh build
 | `NOXIS_DEBUG=1` | **debug build**: userdebug, ADB from the first boot without approval – boot-loop hunting only |
 | `NOXIS_CCACHE=1` | turn ccache on (off by default, see Known issues) |
 | `NOXIS_OTHER_FIRMWARE=1` | allow blobs from a different Nothing OS version than the device tree expects |
-| `NOXIS_ROOT := 0/1` (in `vendor/noxis/config/noxis.mk`) | `0` (default): no root, no KernelSU manager/modules – required for `./noxis.sh avb lock`. `1`: KernelSU in the kernel, manager + modules via postinstall |
-| `NOXIS_KSU_PIN=v3.3.1` | KernelSU release built into the kernel (`none` = keep the kernel tree's copy) |
 | `NOXIS_SRC=/path` | source tree on another disk |
 
 ### Publishing (`./noxis.sh publish`)
@@ -159,7 +156,7 @@ Full Nothing OS OTAs for the blobs: <https://github.com/spike0en/nothing_archive
 
 ### Own apps (Nothing design)
 
-The apps are built into the image the same way their KernelSU modules install them (the phone app as privileged app) – so on Noxis you do **not** need those modules; installing them too would put every app on the phone twice. The modules are for Nothing OS and other ROMs.
+The apps are built into the image (the phone app as privileged app) – each with its home-screen widget.
 
 Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitHub Action (every Monday or on demand) and published as the rolling release `noxis-apps` with `SHA256SUMS` and the source commit of each APK. `./noxis.sh apps` downloads them and checks every checksum; `./noxis.sh sign` re-signs them with your keys.
 
@@ -169,7 +166,7 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 | Clock (alarm, timer, stopwatch) | [NothingClock](https://github.com/Real3rr0r303YT/NothingClock) | DeskClock |
 | Calculator | [Calculator](https://github.com/Real3rr0r303YT/Calculator) | ExactCalculator |
 | Notes | [NothingNotes](https://github.com/Real3rr0r303YT/NothingNotes) | – (added) |
-| Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added as privileged app like its KernelSU module, so two-sided call recording works; set it as default phone app – the stock dialer stays for emergency calls) |
+| Phone | [NothingCall](https://github.com/Real3rr0r303YT/NothingCall) | – (added as privileged app, so two-sided call recording works; set it as default phone app – the stock dialer stays for emergency calls) |
 | Battery | [NothingBattery](https://github.com/Real3rr0r303YT/NothingBattery) | – (added) |
 | Camera | [NothingCamera](https://github.com/Real3rr0r303YT/NothingCamera) | LineageOS camera (Aperture) – offline, metadata stripped, encrypted vault |
 
@@ -186,9 +183,9 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 | GrapheneOS Camera + PDF Viewer | [GrapheneOS](https://github.com/GrapheneOS) | in the image, no network access |
 | Your own APKs (e.g. ZArchiver) | you | put the `.apk` (arm64-v8a!) into `postinstall/` – `./noxis.sh postinstall` installs it too |
 
-**Home screen:** LineageOS' launcher (Trebuchet) – clean, with icon packs, grid size, hidden apps and themed icons. Want the One UI look? Install a One UI Home module in the KernelSU app yourself (e.g. [reiryuki/One-UI-Home-35-Magisk-Module](https://github.com/reiryuki/One-UI-Home-35-Magisk-Module)). Samsung's launcher is proprietary, so Noxis does not ship it, and those modules are made for older Android versions – it may not start on Android 17.
+**Home screen:** LineageOS' launcher (Trebuchet) – clean, with icon packs, grid size, hidden apps and themed icons. Widgets of the own apps: long-press the home screen → *Widgets*.
 
-Vendor-signed APKs with **compressed native libraries** (IronFox, Tor Browser, the KernelSU manager, sometimes Mullvad) cannot be pre-installed system apps on Android 17 without breaking their signature. `./noxis.sh build` detects this, keeps them out of the image and puts them into `postinstall/` – `./noxis.sh postinstall` installs them as normal apps.
+Vendor-signed APKs with **compressed native libraries** (IronFox, Tor Browser, sometimes Mullvad) cannot be pre-installed system apps on Android 17 without breaking their signature. `./noxis.sh build` detects this, keeps them out of the image and puts them into `postinstall/` – `./noxis.sh postinstall` installs them as normal apps.
 
 ### Google services in the app sandbox (microG)
 
@@ -207,14 +204,13 @@ Every app ends up on the phone in one of three ways:
 | Way | Which apps | Updates |
 |---|---|---|
 | **In the image** (system app) | own Nothing apps, F-Droid, Aurora Store, GrapheneOS Camera + PDF Viewer, Noxis Guard – and Mullvad / IronFox when their APK allows it (see above) | come with every Noxis OTA, nothing to do |
-| **After flashing** (`./noxis.sh postinstall`, normal app) | Termux, Tor Browser, KernelSU manager, IronFox / Mullvad if the build moved them to `postinstall/`, KernelSU modules, your own APKs from `postinstall/` | update themselves (F-Droid, Tor's updater, …); they stay through Noxis OTAs |
+| **After flashing** (`./noxis.sh postinstall`, normal app) | Termux, Tor Browser, microG, IronFox / Mullvad if the build moved them to `postinstall/`, your own APKs from `postinstall/` | update themselves (F-Droid, Tor's updater, …); they stay through Noxis OTAs |
 | **You** | anything else – from F-Droid, Aurora Store or as APK | as usual |
 
 Why not everything in the image:
 
 - **Apps that update themselves** (Termux, Tor Browser) work best as normal apps. Baked into the image you would be stuck with the build's version until the next ROM update.
 - **Signature:** vendor-signed APKs with compressed native libraries cannot be system apps on Android 17 without breaking their signature – the build moves them to `postinstall/` automatically.
-- **KernelSU modules** need a running, rooted phone – they cannot be installed while building.
 - **Third-party and closed-source APKs** (e.g. ZArchiver) are not redistributed in this repository. Put them into `postinstall/` yourself.
 - **No Google apps** on purpose: Google Play services and the Play Store are proprietary and phone home – Aurora Store gives you Play Store apps without them.
 
@@ -231,7 +227,7 @@ The security center of Noxis OS – **Settings → Noxis Guard** or the app icon
 * **Protection status** – reads the real system state and shows e.g. *7 of 8 protections active*, with a hint for every missing one.
 * **Virus scan** – checks every user app against ClamAV's Android malware signatures (MD5/SHA-1/SHA-256 of the APK) and for trojan patterns: active accessibility service, device admin, notification access, SMS + overlay (banking trojans), overlay + app install (droppers), installed outside F-Droid/Aurora. **New apps are checked at install** and a hit shows a notification. Fully offline: `./noxis.sh apps` fetches the ClamAV databases on the PC, keeps only the Android signatures and puts them into the image as sorted index files (`/product/etc/noxis/av`) that Guard binary-searches – no RAM cost. Signatures update with every Noxis build. Limit: hashes only find *known* samples; the patterns catch new ones; nothing finds everything.
 * **Duress PIN** (like GrapheneOS) – a second PIN / password; entered on the lock screen it **factory-resets the phone** instead of unlocking. Set in Guard → *Gerätesperre → Notfall-PIN* (needs your current PIN). Only a salted PBKDF2 hash is stored, in `locksettings.db` (system only). Safety: it can never equal your real PIN – Guard refuses that, and changing your lock to the duress PIN or removing the lock deletes it. Any error inside the check means "no match", so a bug can never lock you out. Frameworks patch: `p_duress` (`NoxisDuress.java` + two calls in `LockSettingsService`).
-* **Shortcuts** – KernelSU root grants, per-app network access, default apps, system updates, Mullvad.
+* **Shortcuts** – per-app network access, default apps, system updates, Mullvad.
 
 | Function | Default |
 |---|---|
@@ -248,21 +244,6 @@ The security center of Noxis OS – **Settings → Noxis Guard** or the app icon
 | Notification content on the lock screen | hidden |
 | Time server | pool.ntp.org |
 
-### KernelSU – root per app (only with `NOXIS_ROOT := 1`)
-
-The official `tiann/KernelSU` is built into the kernel. `./noxis.sh build` replaces the kernel tree's own copy with the **official release `v3.3.1`** (`NOXIS_KSU_PIN`), and `./noxis.sh apps` bundles the officially signed manager of exactly that release – kernel and manager then speak the same interface version (otherwise: *Manager update required* / *Kernel update required*).
-
-```
-KernelSU app → Superuser → tap an app → allow "Root"   (default: every app denied)
-KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
-```
-
-### KernelSU modules (`ksu-modules/`)
-
-`./noxis.sh apps` zips every folder in `ksu-modules/` into `postinstall/modules/`; `./noxis.sh postinstall` pushes it to *Download* and installs it with `ksud` (allow **Shell** once in KernelSU → Superuser, or install by hand: KernelSU → Modules → Install → Download/…zip).
-
-* **NoxisSpoof** – apps see another phone model through `android.os.Build` (brand, manufacturer, model of system/product/system_ext). Profiles: Galaxy A55 (default), Galaxy S24, Pixel 8, Pixel 7a, **Off** (real Nothing Phone (3a)) – the **Action** button in KernelSU's module list switches, then reboot. vendor/odm values stay real so camera, modem and sensors keep working. Limit: it hides the model from simple apps and sites, not from apps that check hardware, kernel or Play Integrity.
-
 ### Firewall (LineageOS per-app network access)
 
 *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi-Fi**, **Mobile data**, **VPN**, **Background data**.
@@ -272,11 +253,10 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 | Mullvad VPN | ✓ | ✓ | ✓ | – | ✓ | ✗ |
 | IronFox, Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | F-Droid, Aurora Store | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Termux | ✓ | ✓ | ✓ | ✓ | ✗ | only if you allow it |
+| Termux | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | Camera, PDF Viewer, Gallery | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Calculator, Clock, Notes, Calendar, Battery | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Phone, SMS, NothingCall | system (cellular) | | | | | ✗ |
-| KernelSU manager | ✗ | ✗ | ✗ | ✗ | ✗ | – |
 | New apps | allow only when needed | | | | | ✗ |
 
 ### Deliberately not included
@@ -284,7 +264,8 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 * **Sandboxed Google Play** – GrapheneOS' GmsCompat spans dozens of patches across `frameworks/base`, PackageManager, Settings and its own app. Without that port there is no working "skeleton", and an empty one is not shipped.
 * **Vanadium** – distributed for GrapheneOS only. IronFox is the hardened browser here.
 * **Play Integrity / keystore spoofing** – not part of Noxis.
-* **Samsung's One UI launcher** – proprietary; install a module yourself if you want it.
+* **Root (KernelSU, Magisk)** – root tools can change the system and break verified boot; Noxis is OPSEC without root.
+* **Samsung's One UI launcher** – proprietary.
 
 ---
 
@@ -296,7 +277,7 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 |---|---|---|
 | Base | `LineageOS/android` | `lineage-24.0` |
 | `device/nothing/asteroids` | `crdroid-asteroids/device_nothing_asteroids` | `17` |
-| `kernel/nothing/sm7635` (incl. `KernelSU/`) | `crdroid-asteroids/kernel_nothing_sm7635` | `17` |
+| `kernel/nothing/sm7635` | `crdroid-asteroids/kernel_nothing_sm7635` | `17` |
 | `kernel/nothing/sm7635-modules` | `crdroid-asteroids/kernel_nothing_sm7635-modules` | `17` |
 | `kernel/nothing/sm7635-devicetrees` | `crdroid-asteroids/kernel_nothing_sm7635-devicetrees` | `17` |
 | `hardware/nothing`, `hardware/dolby` | `crdroid-asteroids/…` | `17` |
@@ -308,7 +289,7 @@ KernelSU app → Superuser → app → "Unmount modules" / profile "Restricted"
 
 | Change | Where | Effect |
 |---|---|---|
-| KernelSU built in | `device/.../BoardConfig.mk` | `CONFIG_KSU=y`, official release pinned |
+| No root | `device/.../BoardConfig.mk` | the device tree's KernelSU config is removed from the kernel |
 | Kernel hardening | `vendor/noxis/config/BoardConfigNoxis.mk` | `init_on_alloc=1 init_on_free=1 page_alloc.shuffle=1 slab_nomerge randomize_kstack_offset=on` |
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
@@ -346,7 +327,6 @@ Stuck for more than 15 minutes: hold **Volume down + Power** for 15 s → fastbo
 
 | Command | Use |
 |---|---|
-| `./noxis.sh overlayfix` | rebuilds changed overlays with the tree's `aapt2`, signs them with your platform key and mounts them as KernelSU module |
 | `./noxis.sh debugadb` | puts your PC's ADB key into `init_boot`/`recovery` and turns ADB on during boot – `adb logcat` while the boot hangs |
 | `./noxis.sh sysextfix` | adds missing privileged permissions to `system_ext.img` of the finished build |
 | `./noxis.sh direct` | writes only the system partitions again via fastbootd |
@@ -365,7 +345,7 @@ Each step checks the one before it, and everything up to `lock` can be undone wh
 | `./noxis.sh avb log` | Kernel/init log of a failed boot (pstore) – to find why verification fails. |
 | `./noxis.sh avb restore` | Back to vbmeta with verification off. |
 | `./noxis.sh avb key` | Writes your AVB public key into the bootloader (`fastboot flash avb_custom_key`). Stops if the bootloader refuses it – then locking is impossible on this phone. |
-| `./noxis.sh avb lock` | Only if verified boot was confirmed, the key matches, OEM unlocking is on and the phone has **no root** (`NOXIS_ROOT := 0`, no KernelSU, no modules): type `LOCK` → `fastboot flashing lock` (**wipes the phone**). From then on every `sign` builds with verified boot on. |
+| `./noxis.sh avb lock` | Only if verified boot was confirmed, the key matches, OEM unlocking is on and the phone has **no root** (no KernelSU, no su): type `LOCK` → `fastboot flashing lock` (**wipes the phone**). From then on every `sign` builds with verified boot on. |
 
 Keep **OEM unlocking** on after locking – it is the way back (`fastboot flashing unlock`). Never lose `~/.noxis-keys`: without `avb.pem` no update boots on a locked phone.
 
@@ -405,4 +385,4 @@ This program comes with ABSOLUTELY NO WARRANTY. This is free software, and you a
 welcome to redistribute it under the conditions of the GNU GPL v3 or later.
 ```
 
-Upstream components keep their licenses: LineageOS/AOSP (Apache-2.0), the Nothing/crDroid kernel (GPL-2.0), KernelSU (GPL-3.0), apps downloaded during the build (their own licenses). Vendor blobs from the Nothing OTA are proprietary – they are extracted on your machine and never belong in this repository.
+Upstream components keep their licenses: LineageOS/AOSP (Apache-2.0), the Nothing/crDroid kernel (GPL-2.0), apps downloaded during the build (their own licenses). Vendor blobs from the Nothing OTA are proprietary – they are extracted on your machine and never belong in this repository.

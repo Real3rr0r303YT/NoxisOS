@@ -58,42 +58,17 @@ def p_inherit():
 
 
 # ------------------------------------------------------------ 2. KernelSU im Kernel verankern
-def noxis_root():
-    """NOXIS_ROOT := 0/1 from vendor/noxis/config/noxis.mk (default 1)."""
-    m = re.search(r"^NOXIS_ROOT\s*:=\s*(\d)", read("vendor/noxis/config/noxis.mk"), re.M)
-    return m.group(1) != "0" if m else True
-
-
 def p_ksu():
+    """Noxis has no root: take the device tree's KernelSU config fragment out of the kernel."""
     f = f"{DEV}/BoardConfig.mk"
     s = read(f)
-    if not noxis_root():
-        # No root: take the KernelSU config fragment out of the kernel again.
-        new, n = re.subn(r"[ \t]*\\\n[ \t]*vendor/asteroids_ksu\.config[ \t]*(?=\n)", "", s)
-        if n:
-            write(f, new)
-            return ok("KernelSU removed from the kernel (NOXIS_ROOT := 0)", "patched")
-        return ok("No KernelSU in the kernel (NOXIS_ROOT := 0)", "already done")
-    if re.search(r"^[ \t]*vendor/asteroids_ksu\.config", s, re.M):
-        return ok("KernelSU in the kernel (CONFIG_KSU=y)", "already done")
-    new, n = re.subn(r"(\n[ \t]*vendor/asteroids_perf\.config)[ \t]*(?=\n)",
-                     r"\1 \\\n    vendor/asteroids_ksu.config", s)
-    if n != 1:
-        return fail("KernelSU in the kernel (CONFIG_KSU=y)", "TARGET_KERNEL_CONFIG not found")
-    write(f, new)
-    ok("KernelSU in the kernel (CONFIG_KSU=y)", "patched")
-
-
-def p_ksu_source():
-    if not noxis_root():
-        return ok("KernelSU source in the kernel", "not needed (NOXIS_ROOT := 0)")
-    kconf = "kernel/nothing/sm7635/arch/arm64/configs/vendor/asteroids_ksu.config"
-    ksrc = "kernel/nothing/sm7635/KernelSU/kernel/Kbuild"
-    if not os.path.exists(path("kernel/nothing/sm7635")):
-        return ok("KernelSU source in the kernel", "skipped (kernel not synced)")
-    if not os.path.exists(path(ksrc)) or "CONFIG_KSU=y" not in read(kconf):
-        return fail("KernelSU source in the kernel", f"{ksrc} or CONFIG_KSU=y missing")
-    ok("KernelSU source in the kernel", "ok")
+    new, n = re.subn(r"[ \t]*\\\n[ \t]*vendor/asteroids_ksu\.config[ \t]*(?=\n)", "", s)
+    if n:
+        write(f, new)
+        return ok("KernelSU removed from the kernel (no root)", "patched")
+    if "asteroids_ksu.config" in s:
+        return fail("KernelSU removed from the kernel (no root)", "asteroids_ksu.config in an unexpected place")
+    ok("No KernelSU in the kernel (no root)", "already done")
 
 
 # ------------------------------------------------------------ 3. Board-Härtung + AVB an
@@ -438,7 +413,7 @@ def p_duress():
     ok(name, "patched" if (changed or copied) else "already done")
 
 
-for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc,
+for p in (p_inherit, p_ksu, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc,
           p_recovery, p_easteregg, p_zram, p_duress):
     try:
         p()
