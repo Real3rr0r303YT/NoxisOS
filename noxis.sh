@@ -783,6 +783,20 @@ cmd_sign() {
   mkdir -p "$REL"
   local stamp; stamp=$(date -u +%Y%m%d)
   local name="Noxis-$(noxis_version)-$stamp-$DEVICE"
+  # Space: signing needs about 3x the target_files (unpacked copy in /tmp,
+  # signed zip, OTA, images). Older Noxis builds in release/ are already on
+  # GitHub (publish) - they go first. Leftovers of an aborted sign in /tmp too.
+  local old f
+  find "${TMPDIR:-/tmp}" -maxdepth 1 \( -name 'signed_target_files_*' -o -name 'targetfiles-*' \
+    -o -name 'tmp*_target_files*' \) -user "$(id -u)" -mmin +5 -exec rm -rf {} + 2>/dev/null || true
+  old=$(find "$REL" -maxdepth 1 -name 'Noxis-*' ! -name "$name*" 2>/dev/null || true)
+  if [ -n "$old" ]; then
+    c "Deleting older builds in release/ (they are on GitHub):"
+    while IFS= read -r f; do echo "    $(basename "$f")"; rm -f "$f"; done <<< "$old"
+  fi
+  rm -f "$REL/$name"-*
+  need_space "$REL" 15 "signing (target_files, OTA, images)"
+  need_space "${TMPDIR:-/tmp}" 10 "signing (temporary files in ${TMPDIR:-/tmp})"
   local -a args
   mapfile -t args < <(python3 "$NOXIS/tools/noxis_sign_args.py" "$tf" "$KEYS" args)
   # The OTA also rewrites vbmeta. Built with verification on, init aborts on
