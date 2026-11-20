@@ -549,6 +549,9 @@ ksu_download() {  # <tag> <target.apk>
 # back to version 16 - the version number is written in from the release's
 # manager APK name (KernelSU_v3.3.1_32703-release.apk → 32703).
 ksu_pin() {
+  # NOXIS_ROOT := 0: KernelSU is not built at all (config fragment removed by
+  # noxis_patch.py), so the source copy does not matter - say so instead.
+  if ! noxis_root; then c "No root (NOXIS_ROOT := 0): KernelSU is NOT built into the kernel"; return 0; fi
   [ "$KSU_PIN" = none ] && return 0
   local dir="$SRC/kernel/nothing/sm7635/KernelSU" mark tmp ver
   [ -d "$dir" ] || { warn "KernelSU: $dir missing – kernel not synced?"; return 0; }
