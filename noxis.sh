@@ -1104,7 +1104,19 @@ cmd_flash() {
   local img
   img=$(latest img.zip)
   [ -f "$img" ] || die "Run ./noxis.sh sign first"
-  c "ROM: $(basename "$img")"
+  # Version + date from the name: Noxis-1.5-20261120-asteroids-img.zip
+  local ver day now=""
+  ver=$(basename "$img" | sed -n 's/^Noxis-\([^-]*\)-.*/\1/p')
+  day=$(basename "$img" | sed -n 's/^Noxis-[^-]*-\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)-.*/\3.\2.\1/p')
+  if adb_ready 2>/dev/null; then
+    now=$(adb shell getprop ro.noxis.version 2>/dev/null | tr -d '\r' || true)
+  fi
+  printf '\n  \033[1;33m!! Noxis OS %s (%s) is going to be installed !!\033[0m\n' "${ver:-?}" "${day:-?}"
+  echo "     File:     $(basename "$img")"
+  [ -n "$now" ] && echo "     On phone: Noxis OS $now"
+  printf '  \033[1;31m   The phone gets WIPED completely (apps, photos, everything).\033[0m\n\n'
+  local a; read -rp "  Press y to continue: " a
+  case "${a,,}" in y|yes|j|ja) ;; *) c "Cancelled – nothing flashed"; exit 0 ;; esac
   cat <<EOF
 
   Preparation (once):
