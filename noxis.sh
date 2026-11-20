@@ -700,6 +700,14 @@ cmd_build() {
   fi
   apks_check
   lfs_check
+  # Kernel .config from an older build with KernelSU: Lineage's kernel build
+  # only regenerates it when a fragment file changes - remove it so the
+  # no-root fragment really applies (the kernel is recompiled, out/ stays).
+  local kcfg="$SRC/out/target/product/$DEVICE/obj/KERNEL_OBJ/.config"
+  if [ -f "$kcfg" ] && grep -q '^CONFIG_KSU=y' "$kcfg"; then
+    c "Old kernel config with KernelSU found – the kernel is rebuilt without it"
+    rm -f "$kcfg"
+  fi
   zram_on
   envsetup
   # ccache is off: on the first build the cache is empty and does not help,

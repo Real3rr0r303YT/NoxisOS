@@ -83,7 +83,11 @@ want_any "Noxis Guard"    NoxisGuard
 # No root in Noxis: no KernelSU manager, no KernelSU in the kernel, no su
 if [ -n "$(find "$PROD" -iname 'KernelSU*.apk' 2>/dev/null | head -1)" ]; then
   bad "KernelSU manager in the image (Noxis has no root)"
-elif [ -f "$PROD/kernel" ] && LC_ALL=C grep -aq "KernelSU" "$PROD/kernel"; then
+elif [ -f "$PROD/obj/KERNEL_OBJ/.config" ] && grep -q '^CONFIG_KSU=y' "$PROD/obj/KERNEL_OBJ/.config"; then
+  bad "Kernel built with CONFIG_KSU=y (Noxis has no root)"
+elif [ -f "$PROD/kernel" ] && { LC_ALL=C grep -aq "KernelSU" "$PROD/kernel" \
+       || { gzip -t "$PROD/kernel" 2>/dev/null && gzip -dc "$PROD/kernel" | LC_ALL=C grep -aq "KernelSU"; } \
+       || { command -v lz4 >/dev/null && lz4 -dc "$PROD/kernel" 2>/dev/null | LC_ALL=C grep -aq "KernelSU"; }; }; then
   bad "Kernel contains KernelSU (Noxis has no root)"
 elif [ -e "$SYS/xbin/su" ] || [ -e "$SYS/bin/su" ]; then
   bad "su binary in the image (Noxis has no root)"

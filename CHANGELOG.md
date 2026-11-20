@@ -2,6 +2,13 @@
 
 Made by 3rr0r303YT on TikTok · GPL-3.0
 
+## 1.5
+
+- **KernelSU really gone from the kernel:** KernelSU's kernel option is on by default, so removing the device tree's KernelSU fragment in 1.4 was not enough – the 1.4 kernel still contained the KernelSU driver (no manager, no root for apps, but not clean). New fragment `noxis_noroot.config` switches it off; `./noxis.sh build` throws away an old kernel config with KernelSU so the kernel is rebuilt.
+- **`./noxis.sh opsec`** now checks the kernel config (`CONFIG_KSU`) and compressed kernels – the 1.4 check could not see inside the kernel image.
+- **Verified boot debugging:** `printk.devkmsg=on`, so init's dm-verity/AVB messages are no longer rate-limited away from the boot log.
+- **`./noxis.sh avb`:** `key` before `test` (reversible with `avb unkey`), `status` no longer stops without root, `lock` checks OEM unlocking in the bootloader and flashes vbmeta with verification on first.
+
 ## 1.4
 
 - **No root, only OPSEC:** KernelSU removed completely – not in the kernel, no manager, no modules, no `su`. The module NoxisSpoof and `./noxis.sh overlayfix` / `./noxis.sh ksu` are gone. `./noxis.sh apps` deletes old KernelSU leftovers. Requirement for verified boot. **Before updating:** remove all KernelSU modules on the phone.

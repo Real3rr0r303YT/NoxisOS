@@ -2,7 +2,7 @@
 #  Noxis OS – Produktkonfiguration
 #  Wird von device/nothing/asteroids/lineage_asteroids.mk geerbt
 # ============================================================
-NOXIS_VERSION := 1.4
+NOXIS_VERSION := 1.5
 NOXIS_PATH := vendor/noxis
 # No root at all: no root manager in the kernel, no su - the requirement for
 # verified boot and a locked bootloader (tools/noxis_patch.py removes the

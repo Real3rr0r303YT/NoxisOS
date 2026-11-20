@@ -58,17 +58,32 @@ def p_inherit():
 
 
 # ------------------------------------------------------------ 2. KernelSU im Kernel verankern
+KSU_OFF = "vendor/noxis_noroot.config"
+
 def p_ksu():
-    """Noxis has no root: take the device tree's KernelSU config fragment out of the kernel."""
+    """Noxis has no root. KernelSU's Kconfig says "default y" - dropping the
+    device tree's KernelSU fragment is NOT enough, the driver stays in the
+    kernel. Our own last fragment switches it off explicitly."""
+    frag = "kernel/nothing/sm7635/arch/arm64/configs/" + KSU_OFF
+    want = "# Noxis OS: no root - Made by 3rr0r303YT on TikTok (GPL-3.0)\n# CONFIG_KSU is not set\n"
+    if not os.path.isdir(os.path.join(ROOT, os.path.dirname(frag))):
+        return fail("KernelSU off in the kernel (no root)", "kernel tree missing: " + os.path.dirname(frag))
+    if not os.path.exists(os.path.join(ROOT, frag)) or read(frag) != want:
+        write(frag, want)
     f = f"{DEV}/BoardConfig.mk"
     s = read(f)
-    new, n = re.subn(r"[ \t]*\\\n[ \t]*vendor/asteroids_ksu\.config[ \t]*(?=\n)", "", s)
-    if n:
+    new = re.sub(r"[ \t]*\\\n[ \t]*vendor/asteroids_ksu\.config[ \t]*(?=\n)", "", s)
+    if KSU_OFF not in new:
+        new, n = re.subn(r"(TARGET_KERNEL_CONFIG := \\\n(?:[ \t]+\S+[ \t]*\\\n)*[ \t]+\S+)",
+                         lambda m: m.group(1) + " \\\n    " + KSU_OFF, new, count=1)
+        if not n:
+            return fail("KernelSU off in the kernel (no root)", "TARGET_KERNEL_CONFIG not found")
+    if "asteroids_ksu.config" in new:
+        return fail("KernelSU off in the kernel (no root)", "asteroids_ksu.config in an unexpected place")
+    if new != s:
         write(f, new)
-        return ok("KernelSU removed from the kernel (no root)", "patched")
-    if "asteroids_ksu.config" in s:
-        return fail("KernelSU removed from the kernel (no root)", "asteroids_ksu.config in an unexpected place")
-    ok("No KernelSU in the kernel (no root)", "already done")
+        return ok("KernelSU off in the kernel (no root)", "patched")
+    ok("KernelSU off in the kernel (no root)", "already done")
 
 
 # ------------------------------------------------------------ 3. Board-Härtung + AVB an
