@@ -341,24 +341,9 @@ Stuck for more than 15 minutes: hold **Volume down + Power** for 15 s → fastbo
 
 ---
 
-## Locking the bootloader (`./noxis.sh avb`)
-
-Each step checks the one before it, and everything up to `lock` can be undone while the bootloader is unlocked:
-
-| Step | What happens |
-|---|---|
-| `./noxis.sh avb test` | vbmeta of the **current slot** re-signed with your AVB key and verification **on** (same descriptors, nothing rebuilt). If Android does not boot, the phone falls back to the other slot. |
-| `./noxis.sh avb status` | Shows `verifiedbootstate`, `veritymode`, OEM unlocking. `veritymode=enforcing` = verified boot works. |
-| `./noxis.sh avb log` | Kernel/init log of a failed boot (pstore) – to find why verification fails. |
-| `./noxis.sh avb restore` | Back to vbmeta with verification off. |
-| `./noxis.sh avb key` | Writes your AVB public key into the bootloader (`fastboot flash avb_custom_key`). Stops if the bootloader refuses it – then locking is impossible on this phone. |
-| `./noxis.sh avb lock` | Only if verified boot was confirmed, the key matches and OEM unlocking is on: type `LOCK` → `fastboot flashing lock` (**wipes the phone**). From then on every `sign` builds with verified boot on. |
-
-Keep **OEM unlocking** on after locking – it is the way back (`fastboot flashing unlock`). Never lose `~/.noxis-keys`: without `avb.pem` no update boots on a locked phone.
-
 ## Known issues
 
-* **Verified boot is switched off by default.** With verification on, `init` aborted during boot on early builds. `vbmeta` is flashed with `--disable-verity --disable-verification`, and `./noxis.sh sign` builds the vbmeta inside the OTA the same way (`--flags 3`), so updates boot too. The images are still signed with your own keys. Do **not** run `fastboot flashing lock` by hand – use the guarded path below.
+* **Verified boot is switched off.** With verification on, `init` aborts during boot. Until the cause is found, `vbmeta` is flashed with `--disable-verity --disable-verification`, and `./noxis.sh sign` builds the vbmeta inside the OTA the same way (`--flags 3`), so updates boot too. The images are still signed with your own keys. Because of this the bootloader must stay **unlocked** – never run `fastboot flashing lock`.
 * **Restart with the USB cable plugged in** used to end in the black charging screen. `noxis-charger.rc` leaves charger mode once after a restart; if the bootloader insists, the phone stays charging – press power.
 * **Missing privileged permissions = boot loop.** `./noxis.sh build` compares every privileged permission of our priv-apps with `vendor/noxis/permissions/*.xml` **before** building.
 * **Firmware/blob version:** the device tree expects Nothing OS B4.1-260928-1204. Blobs from another version build with `NOXIS_OTHER_FIRMWARE=1`, but camera, modem or fingerprint may misbehave.
