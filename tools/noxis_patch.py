@@ -6,6 +6,7 @@ Jeder Patch prüft, ob er schon angewendet ist. Kritische Patches (KernelSU im
 Kernel, Noxis-Produkt) brechen ab, wenn ihr Muster nicht gefunden wird.
 """
 import os
+import shutil
 import re
 import sys
 
@@ -395,8 +396,50 @@ def p_zram():
     ok(name, "patched")
 
 
+# ------------------------------------------------------------ Duress PIN (like GrapheneOS)
+def p_duress():
+    """Second PIN that wipes the phone (set in Noxis Guard). NoxisDuress.java is copied next
+    to LockSettingsService, which gets two calls: check before verifying a credential, and
+    cleanup when the lock credential changes. Anchors missing -> FAIL, never a half patch."""
+    name = "Duress PIN (LockSettingsService)"
+    d = "frameworks/base/services/core/java/com/android/server/locksettings"
+    f = f"{d}/LockSettingsService.java"
+    if not os.path.exists(path(f)):
+        return ok(name, "skipped (frameworks/base not synced)")
+    src = path("vendor/noxis/patches/frameworks_base/NoxisDuress.java")
+    dst = path(f"{d}/NoxisDuress.java")
+    copied = not os.path.exists(dst) or open(src).read() != open(dst).read()
+    if copied:
+        shutil.copyfile(src, dst)
+    s = read(f)
+    hook1_anchor = 'Slogf.i(TAG, "Verifying lockscreen credential for user %d", userId);\n'
+    hook1 = ("        // Noxis: duress PIN (Noxis Guard) wipes the phone instead of unlocking\n"
+             "        if (userId == UserHandle.USER_SYSTEM && NoxisDuress.matches(mStorage, credential)) {\n"
+             "            NoxisDuress.wipe(mContext);\n"
+             "            return VerifyCredentialResponse.fromError();\n"
+             "        }\n")
+    hook2_anchor = "            credential.validateBasicRequirements();\n"
+    hook2 = "            NoxisDuress.onCredentialChanged(mStorage, credential, userId);\n"
+    changed = False
+    if "NoxisDuress.matches(" not in s:
+        if s.count(hook1_anchor) != 1:
+            return fail(name, "verify anchor not found exactly once")
+        s = s.replace(hook1_anchor, hook1_anchor + hook1, 1)
+        changed = True
+    if "NoxisDuress.onCredentialChanged(" not in s:
+        i = s.find("public boolean setLockCredential(")
+        j = s.find(hook2_anchor, i) if i >= 0 else -1
+        if j < 0:
+            return fail(name, "setLockCredential anchor not found")
+        s = s[:j + len(hook2_anchor)] + hook2 + s[j + len(hook2_anchor):]
+        changed = True
+    if changed:
+        write(f, s)
+    ok(name, "patched" if (changed or copied) else "already done")
+
+
 for p in (p_inherit, p_ksu, p_ksu_source, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc,
-          p_recovery, p_easteregg, p_zram):
+          p_recovery, p_easteregg, p_zram, p_duress):
     try:
         p()
     except FileNotFoundError as e:

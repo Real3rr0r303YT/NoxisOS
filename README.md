@@ -230,11 +230,13 @@ The security center of Noxis OS – **Settings → Noxis Guard** or the app icon
 
 * **Protection status** – reads the real system state and shows e.g. *7 of 8 protections active*, with a hint for every missing one.
 * **Virus scan** – checks every user app against ClamAV's Android malware signatures (MD5/SHA-1/SHA-256 of the APK) and for trojan patterns: active accessibility service, device admin, notification access, SMS + overlay (banking trojans), overlay + app install (droppers), installed outside F-Droid/Aurora. **New apps are checked at install** and a hit shows a notification. Fully offline: `./noxis.sh apps` fetches the ClamAV databases on the PC, keeps only the Android signatures and puts them into the image as sorted index files (`/product/etc/noxis/av`) that Guard binary-searches – no RAM cost. Signatures update with every Noxis build. Limit: hashes only find *known* samples; the patterns catch new ones; nothing finds everything.
+* **Duress PIN** (like GrapheneOS) – a second PIN / password; entered on the lock screen it **factory-resets the phone** instead of unlocking. Set in Guard → *Gerätesperre → Notfall-PIN* (needs your current PIN). Only a salted PBKDF2 hash is stored, in `locksettings.db` (system only). Safety: it can never equal your real PIN – Guard refuses that, and changing your lock to the duress PIN or removing the lock deletes it. Any error inside the check means "no match", so a bug can never lock you out. Frameworks patch: `p_duress` (`NoxisDuress.java` + two calls in `LockSettingsService`).
 * **Shortcuts** – KernelSU root grants, per-app network access, default apps, system updates, Mullvad.
 
 | Function | Default |
 |---|---|
 | Auto-reboot after X h locked (back to BFU) | 18 h |
+| Duress PIN (wipes the phone) | off |
 | USB-C charge-only while locked | on |
 | Wi-Fi / Bluetooth auto-off | off (2–120 min) |
 | Mullvad always-on + killswitch | on (at first unlock) |

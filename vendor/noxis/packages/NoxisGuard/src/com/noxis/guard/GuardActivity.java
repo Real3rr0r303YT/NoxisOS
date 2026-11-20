@@ -66,6 +66,7 @@ public class GuardActivity extends Activity {
                         + "vollständig verschlüsselt (Zustand vor dem ersten Entsperren).",
                 labels(REBOOT_H, true), indexOf(REBOOT_H, Prefs.autoRebootHours(this)),
                 i -> mPrefs.edit().putInt(Prefs.AUTO_REBOOT_HOURS, REBOOT_H[i]).apply());
+        duressRow();
         toggle("USB-C nur Laden, wenn gesperrt",
                 "Blockiert Datenverbindungen über USB, solange das Gerät gesperrt ist.",
                 Prefs.usbLock(this), on -> mPrefs.edit().putBoolean(Prefs.USB_LOCK, on).apply());
@@ -209,6 +210,70 @@ public class GuardActivity extends Activity {
             link("Mullvad VPN öffnen", "Konto, Server, Verbindung",
                     getPackageManager().getLaunchIntentForPackage(Prefs.MULLVAD));
         }
+    }
+
+    /* ---------------- Notfall-PIN (Duress) ---------------- */
+
+    private void duressRow() {
+        if (!Duress.supported()) return;
+        boolean on = Duress.isSet();
+        LinearLayout row = row("Notfall-PIN (löscht alles)", (on ? "An" : "Aus")
+                + "\nEine zweite PIN: wer sie am Sperrbildschirm eingibt, setzt das Gerät sofort auf "
+                + "Werkseinstellungen zurück – ohne Nachfrage. Für den Notfall, wenn du entsperren musst.");
+        row.addView(text("›", 22, false));
+        row.setOnClickListener(v -> duressDialog(on));
+        mList.addView(row);
+    }
+
+    private void duressDialog(boolean on) {
+        boolean pin = Duress.lockType(this) == com.android.internal.widget.LockPatternUtils.CREDENTIAL_TYPE_PIN;
+        int input = android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD;
+        if (!pin) input = android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        android.widget.EditText cur = field(box, "Aktuelle PIN / Passwort", input);
+        android.widget.EditText du = field(box, "Neue Notfall-PIN", input);
+        android.widget.EditText rep = field(box, "Notfall-PIN wiederholen", input);
+        TextView warn = text("Achtung: Diese PIN am Sperrbildschirm = ALLE Daten weg. "
+                + "Ändern sich deine echte PIN auf die Notfall-PIN oder entfernst du die Sperre, "
+                + "wird die Notfall-PIN automatisch gelöscht.", 13, false);
+        warn.setTextColor(0xFFFFB27C);
+        warn.setPadding(0, dp(12), 0, 0);
+        box.addView(warn);
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
+                .setTitle("Notfall-PIN")
+                .setView(box)
+                .setPositiveButton("Speichern", (d, w) -> {
+                    String c = cur.getText().toString(), n = du.getText().toString(), r = rep.getText().toString();
+                    new Thread(() -> {
+                        String err = Duress.set(this, c, n, r);
+                        runOnUiThread(() -> {
+                            new AlertDialog.Builder(this)
+                                    .setTitle(err == null ? "Notfall-PIN aktiv" : "Nicht gespeichert")
+                                    .setMessage(err == null ? "Eingabe am Sperrbildschirm löscht das Gerät." : err)
+                                    .setPositiveButton(android.R.string.ok, null).show();
+                            render();
+                        });
+                    }).start();
+                })
+                .setNegativeButton(android.R.string.cancel, null);
+        if (on) {
+            b.setNeutralButton("Entfernen", (d, w) -> {
+                Duress.clear();
+                render();
+            });
+        }
+        b.show();
+    }
+
+    private android.widget.EditText field(LinearLayout box, String hint, int input) {
+        android.widget.EditText e = new android.widget.EditText(this);
+        e.setHint(hint);
+        e.setInputType(input);
+        e.setSingleLine(true);
+        box.addView(e);
+        return e;
     }
 
     private void link(String title, String summary, Intent intent) {
