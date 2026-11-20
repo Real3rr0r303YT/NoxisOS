@@ -24,6 +24,8 @@
 #  ./noxis.sh postinstall        After the first boot: Termux/Tor/... via adb
 #  ./noxis.sh ksu                KernelSU manager matching the kernel (installs via adb)
 #  ./noxis.sh publish            Upload the OTA as a GitHub release → phone: Settings → System → Updater
+#  ./noxis.sh avb <step>         Verified boot + locking the bootloader: test, status, log,
+#                                restore, key, lock (each step checks the one before)
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
 #
 #  Repair / debugging (no rebuild needed):
@@ -924,6 +926,8 @@ cmd_sign() {
   # So the vbmeta in OTA + images carries the same flags as the first flash
   # (--disable-verity --disable-verification = --flags 3). Images stay signed.
   # NOXIS_VERIFIED_BOOT=1 leaves verification on (only once the cause is fixed).
+  # Once the bootloader was locked (./noxis.sh avb lock) verification must stay on.
+  [ -s "$KEYS/avb-state/locked" ] && NOXIS_VERIFIED_BOOT=1
   [ "${NOXIS_VERIFIED_BOOT:-0}" = 1 ] || args+=(--avb_vbmeta_extra_args "--flags 3")
   c "Signing (apps, APEXes, verified boot)"
   sign_target_files_apks "${args[@]}" "$tf" "$REL/$name-target_files.zip"
@@ -1474,6 +1478,163 @@ cmd_sysextfix() {
   c "Repaired image ready. Write it: ./noxis.sh direct"
 }
 
+# ------------------------------------------------------------ Verified Boot / AVB
+# Path to locking the bootloader, step by step - every step can be undone while
+# the bootloader is unlocked:
+#   ./noxis.sh avb test     vbmeta with verification ON into the current slot
+#   ./noxis.sh avb status   does Android run with verified boot (veritymode=enforcing)?
+#   ./noxis.sh avb log      why it did not (kernel/init log of the failed boot)
+#   ./noxis.sh avb restore  back to vbmeta with verification off
+#   ./noxis.sh avb key      own AVB key into the bootloader (avb_custom_key)
+#   ./noxis.sh avb lock     only after all of the above: fastboot flashing lock
+AVB_STATE="$KEYS/avb-state"
+
+avbtool() {
+  local t
+  for t in "$SRC/out/host/linux-x86/bin/avbtool" "$SRC/external/avb/avbtool.py"; do
+    [ -x "$t" ] || [ -f "$t" ] || continue
+    case "$t" in *.py) python3 "$t" "$@" ;; *) "$t" "$@" ;; esac
+    return
+  done
+  die "avbtool not found (needs the source in $SRC)"
+}
+
+avb_mark() { mkdir -p "$AVB_STATE"; printf '%s\n' "${2:-$(date -u +%FT%TZ)}" > "$AVB_STATE/$1"; }
+avb_has()  { [ -s "$AVB_STATE/$1" ]; }
+
+# vbmeta of the newest img.zip, re-signed with the Noxis AVB key and flags 0
+# (verification on). Same descriptors and rollback index - nothing is rebuilt.
+avb_verify_image() {  # <out file>
+  local img tmp ri
+  img=$(latest img.zip); [ -f "$img" ] || die "No ROM in $REL – ./noxis.sh sign"
+  [ -f "$KEYS/avb.pem" ] || die "$KEYS/avb.pem missing – ./noxis.sh keys"
+  tmp=$(mktemp -d)
+  unzip -q -o "$img" vbmeta.img -d "$tmp" || die "vbmeta.img not in $(basename "$img")"
+  ri=$(avbtool info_image --image "$tmp/vbmeta.img" | sed -n 's/^Rollback Index: *//p')
+  avbtool make_vbmeta_image --output "$1" --key "$KEYS/avb.pem" --algorithm SHA256_RSA4096 \
+    --rollback_index "${ri:-0}" --padding_size 4096 --flags 0 \
+    --include_descriptors_from_image "$tmp/vbmeta.img"
+  avbtool info_image --image "$1" | grep -E "^(Flags|Rollback Index|Algorithm):" | sed 's/^/    /'
+  rm -rf "$tmp"
+}
+
+adb_ready() { adb get-state 2>/dev/null | grep -q device; }
+
+avb_to_bootloader() {
+  if adb_ready; then
+    local want have
+    want=$(basename "$(latest img.zip)" | sed -n 's/^Noxis-\([0-9.]*\)-.*/\1/p')
+    have=$(adb shell getprop ro.noxis.version | tr -d '\r')
+    [ "$want" = "$have" ] || die "Phone runs Noxis $have, the ROM here is $want – install $want first (System updates)"
+    c "Phone runs Noxis $have – rebooting to the bootloader"
+    adb reboot bootloader
+  fi
+  c "Waiting for fastboot …"
+  local i; for i in $(seq 60); do fastboot devices 2>/dev/null | grep -q . && break; sleep 2; done
+  fastboot getvar unlocked 2>&1 | grep -q "unlocked: yes" || die "Bootloader not unlocked / not in fastboot"
+}
+
+cmd_avb() {
+  need adb "install android-tools"; need fastboot "install android-tools"
+  case "${1:-}" in
+    test)
+      cat <<EOF
+
+  Test: Android with verified boot ON (bootloader stays unlocked).
+  The vbmeta of the current slot gets verification on. If Android does not
+  boot, the phone falls back to the other slot by itself after a few tries -
+  or run: ./noxis.sh avb restore
+  Phone: Noxis running with USB debugging on, or already in fastboot.
+
+EOF
+      confirm "Start the test?" || exit 0
+      local v slot; v=$(mktemp)
+      avb_verify_image "$v"
+      avb_to_bootloader
+      slot=$(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')
+      c "flash vbmeta_${slot:-a} (verification ON)"
+      flash_part "vbmeta_${slot:-a}" "$v" || die "flash failed"
+      rm -f "$v"
+      fastboot reboot
+      c "Wait 5 minutes. Android boots → ./noxis.sh avb status   ·   it does not → ./noxis.sh avb log"
+      ;;
+    status)
+      adb_ready || die "No phone via adb (USB debugging on?)"
+      local vbs vm ds oem slot
+      vbs=$(adb shell getprop ro.boot.verifiedbootstate | tr -d '\r')
+      vm=$(adb shell getprop ro.boot.veritymode | tr -d '\r')
+      ds=$(adb shell getprop ro.boot.vbmeta.device_state | tr -d '\r')
+      oem=$(adb shell getprop sys.oem_unlock_allowed | tr -d '\r')
+      slot=$(adb shell getprop ro.boot.slot_suffix | tr -d '\r')
+      printf '    %-22s %s\n' "slot" "$slot" "verifiedbootstate" "$vbs" "veritymode" "${vm:-?}" \
+        "bootloader" "$ds" "OEM unlocking allowed" "$oem"
+      [ "$oem" = 1 ] && avb_mark oem-unlock-allowed || warn "OEM unlocking is OFF – turn it on (Developer options) before ANY lock"
+      if [ "$vm" = enforcing ]; then
+        avb_mark verified-boot-ok "$slot $(date -u +%FT%TZ)"
+        c "✓ Android runs with verified boot (dm-verity enforcing). Next: ./noxis.sh avb key"
+      else
+        warn "Verified boot is not active (veritymode=${vm:-none}) – ./noxis.sh avb test, then status again"
+      fi
+      ;;
+    log)
+      adb_ready || die "No phone via adb"
+      c "Kernel/init log of the last (failed) boot:"
+      adb shell "su -c 'cat /sys/fs/pstore/console-ramoops* /sys/fs/pstore/pmsg-ramoops* 2>/dev/null'" \
+        | tr -d '\r' | grep -aiE "init: |avb|verity|fs_mgr|dm-|vbmeta|panic|reboot|fail" | tail -n 80 \
+        || warn "No pstore log (root for Shell in KernelSU allowed?)"
+      ;;
+    restore)
+      local img tmp slot; img=$(latest img.zip); [ -f "$img" ] || die "No ROM in $REL"
+      tmp=$(mktemp -d); unzip -q -o "$img" vbmeta.img -d "$tmp"
+      avb_to_bootloader
+      slot=$(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')
+      c "flash vbmeta_${slot:-a} (verification off, as before)"
+      flash_part "vbmeta_${slot:-a}" "$tmp/vbmeta.img" || die "flash failed"
+      rm -rf "$tmp"; fastboot reboot
+      ;;
+    key)
+      avb_has verified-boot-ok || die "First: ./noxis.sh avb test + ./noxis.sh avb status (verified boot must work)"
+      local pk; pk=$(mktemp)
+      avbtool extract_public_key --key "$KEYS/avb.pem" --output "$pk"
+      c "Noxis AVB key: $(sha256sum "$pk" | cut -c1-16)…"
+      avb_to_bootloader
+      local out; out=$(fastboot flash avb_custom_key "$pk" 2>&1); echo "$out" | sed 's/^/    /'
+      if echo "$out" | grep -qiE "FAILED|unknown|not allowed|error"; then
+        rm -f "$pk"
+        die "The bootloader does not accept avb_custom_key – locking with Noxis is NOT possible on this phone. Never run fastboot flashing lock."
+      fi
+      avb_mark custom-key "$(sha256sum "$pk" | cut -d' ' -f1)"; rm -f "$pk"
+      c "✓ Key stored in the bootloader. Lock only with: ./noxis.sh avb lock"
+      fastboot reboot
+      ;;
+    lock)
+      local pk sum; pk=$(mktemp); avbtool extract_public_key --key "$KEYS/avb.pem" --output "$pk"
+      sum=$(sha256sum "$pk" | cut -d' ' -f1); rm -f "$pk"
+      avb_has verified-boot-ok || die "Verified boot not confirmed – ./noxis.sh avb test + status"
+      [ "$(cat "$AVB_STATE/custom-key" 2>/dev/null)" = "$sum" ] || die "avb_custom_key not flashed with the current key – ./noxis.sh avb key"
+      avb_has oem-unlock-allowed || die "OEM unlocking not confirmed ON – turn it on, then ./noxis.sh avb status"
+      cat <<EOF
+
+  LOCK THE BOOTLOADER
+   - ALL DATA ON THE PHONE IS ERASED (photos, apps, KernelSU modules).
+   - Keep "OEM unlocking" ON in Developer options: that is your way back
+     (fastboot flashing unlock) if anything goes wrong.
+   - From now on every ./noxis.sh sign builds with verified boot ON
+     (otherwise a locked phone would refuse the update).
+   - NEVER lose $KEYS – without avb.pem no update will ever boot again.
+
+EOF
+      read -rp "Type LOCK to continue: " a; [ "$a" = LOCK ] || exit 0
+      avb_to_bootloader
+      avb_mark locked
+      c "fastboot flashing lock – confirm on the phone with the volume keys + power"
+      fastboot flashing lock
+      c "After the reset: ./noxis.sh avb status should show verifiedbootstate=yellow (own key) and enforcing."
+      ;;
+    *) die "usage: ./noxis.sh avb test|status|log|restore|key|lock" ;;
+  esac
+}
+
 cmd_all() {
   [ -n "${1:-}" ] || die "./noxis.sh all <nothing-os-ota.zip>"
   cmd_check; cmd_sync; cmd_apps; cmd_blobs "$1"; cmd_keys; cmd_build; cmd_sign
@@ -1498,7 +1659,8 @@ case "${1:-}" in
   sysextfix) cmd_sysextfix ;;
   debugadb) cmd_debugadb ;;
   publish) cmd_publish ;;
+  avb)     shift; cmd_avb "$@" ;;
   cleanup) cmd_cleanup ;;
   all)    shift; cmd_all "$@" ;;
-  *) sed -n '5,32p' "$0" ;;
+  *) sed -n '5,34p' "$0" ;;
 esac
