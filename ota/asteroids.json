@@ -1,17 +1,17 @@
 [
   {
-    "datetime": 1795187597,
+    "datetime": 1795197976,
     "type": "unofficial",
     "version": "24.0",
     "files": [
       {
-        "filename": "Noxis-1.4-20261120-asteroids-ota.zip",
-        "sha256": "d1c2ab6d5dd4c68aafd6989077ca0abd4b80c8e75980a33d0e97f4b6edd5a0d3",
-        "size": 1769496090,
-        "url": "https://github.com/Real3rr0r303YT/NoxisOS/releases/download/noxis-1.4-20261120/Noxis-1.4-20261120-asteroids-ota.zip",
+        "filename": "Noxis-1.5-20261120-asteroids-ota.zip",
+        "sha256": "8bfe83f567626634c079b8fa294a94c6fda30e2066ae244fedc8d8fa65737473",
+        "size": 1769443735,
+        "url": "https://github.com/Real3rr0r303YT/NoxisOS/releases/download/noxis-1.5-20261120/Noxis-1.5-20261120-asteroids-ota.zip",
         "os_patch_level": "2026-11-01",
         "os_sdk_level": 37,
-        "ota_property_files": "payload_metadata.bin:5056:222260,payload.bin:5056:1769487954,payload_properties.txt:1769493068:156,apex_info.pb:2237:1481,care_map.pb:3765:1244,metadata:69:683,metadata.pb:820:1369"
+        "ota_property_files": "payload_metadata.bin:5056:222260,payload.bin:5056:1769435599,payload_properties.txt:1769440713:156,apex_info.pb:2237:1481,care_map.pb:3765:1244,metadata:69:683,metadata.pb:820:1369"
       }
     ]
   }
