@@ -344,7 +344,8 @@ Each step checks the one before it, and everything up to `lock` can be undone wh
 | `./noxis.sh avb status` | Shows `verifiedbootstate`, `veritymode`, OEM unlocking. `veritymode=enforcing` = verified boot works. |
 | `./noxis.sh avb log` | Kernel/init log of a failed boot (pstore) – to find why verification fails. |
 | `./noxis.sh avb restore` | Back to vbmeta with verification off. |
-| `./noxis.sh avb key` | Writes your AVB public key into the bootloader (`fastboot flash avb_custom_key`). Stops if the bootloader refuses it – then locking is impossible on this phone. |
+| `./noxis.sh avb key` | Writes your AVB public key into the bootloader (`fastboot flash avb_custom_key`), safe while unlocked. On the Nothing Phone (3a) run it **before** `avb test`: the bootloader may pass the vbmeta info to Android only for a trusted key. Stops if the bootloader refuses it – then locking is impossible on this phone. |
+| `./noxis.sh avb unkey` | Erases `avb_custom_key` again (only while unlocked). |
 | `./noxis.sh avb lock` | Only if verified boot was confirmed, the key matches, OEM unlocking is on and the phone has **no root** (no KernelSU, no su): type `LOCK` → `fastboot flashing lock` (**wipes the phone**). From then on every `sign` builds with verified boot on. |
 
 **Nothing Phone (3a), tested on 1.4:** with the bootloader unlocked, Nothing's bootloader passes no vbmeta information to Android (`ro.boot.veritymode`, `ro.boot.vbmeta.*` missing, `VBMeta Digest: unavailable`), so Android sets up **no dm-verity** for system/vendor even with verification on – `avb status` cannot confirm verified boot and `key`/`lock` stay blocked. Locking anyway is an untested step: `NOXIS_AVB_UNTESTED=1 ./noxis.sh avb key` and `NOXIS_AVB_UNTESTED=1 ./noxis.sh avb lock` (lock flashes vbmeta with verification on first and still requires OEM unlocking ON). If Noxis does not boot locked: `fastboot flashing unlock` (wipes) and `./noxis.sh flash`.

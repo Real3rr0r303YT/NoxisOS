@@ -23,7 +23,7 @@
 #  ./noxis.sh postinstall        After the first boot: Termux/Tor/... via adb
 #  ./noxis.sh publish            Upload the OTA as a GitHub release → phone: Settings → System → Updater
 #  ./noxis.sh avb <step>         Verified boot + locking the bootloader: test, status, log,
-#                                restore, key, lock (each step checks the one before)
+#                                restore, key, unkey, lock
 #  ./noxis.sh all <ota.zip>      sync → apps → blobs → keys → build → sign
 #
 #  Repair / debugging (no rebuild needed):
@@ -1484,7 +1484,9 @@ EOF
       rm -rf "$tmp"; fastboot reboot
       ;;
     key)
-      avb_vb_ok || die "First: ./noxis.sh avb test + ./noxis.sh avb status (verified boot must work)"
+      # Safe while unlocked and undone with ./noxis.sh avb unkey. Some
+      # bootloaders (Nothing) only pass the vbmeta info to Android once the
+      # vbmeta key is trusted - so the key comes BEFORE avb test there.
       local pk; pk=$(mktemp)
       avbtool extract_public_key --key "$KEYS/avb.pem" --output "$pk"
       c "Noxis AVB key: $(sha256sum "$pk" | cut -c1-16)…"
@@ -1495,7 +1497,14 @@ EOF
         die "The bootloader does not accept avb_custom_key – locking with Noxis is NOT possible on this phone. Never run fastboot flashing lock."
       fi
       avb_mark custom-key "$(sha256sum "$pk" | cut -d' ' -f1)"; rm -f "$pk"
-      c "✓ Key stored in the bootloader. Lock only with: ./noxis.sh avb lock"
+      c "✓ Key stored in the bootloader. Next: ./noxis.sh avb test, then ./noxis.sh avb status  (undo: ./noxis.sh avb unkey)"
+      fastboot reboot
+      ;;
+    unkey)
+      avb_to_bootloader
+      fastboot erase avb_custom_key || die "erase failed"
+      rm -f "$AVB_STATE/custom-key"
+      c "✓ avb_custom_key erased"
       fastboot reboot
       ;;
     lock)
@@ -1547,7 +1556,7 @@ EOF
       fastboot flashing lock
       c "After the reset: ./noxis.sh avb status should show verifiedbootstate=yellow (own key) and enforcing."
       ;;
-    *) die "usage: ./noxis.sh avb test|status|log|restore|key|lock" ;;
+    *) die "usage: ./noxis.sh avb key|test|status|log|restore|unkey|lock" ;;
   esac
 }
 
