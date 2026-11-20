@@ -57,9 +57,22 @@ def p_inherit():
 
 
 # ------------------------------------------------------------ 2. KernelSU im Kernel verankern
+def noxis_root():
+    """NOXIS_ROOT := 0/1 from vendor/noxis/config/noxis.mk (default 1)."""
+    m = re.search(r"^NOXIS_ROOT\s*:=\s*(\d)", read("vendor/noxis/config/noxis.mk"), re.M)
+    return m.group(1) != "0" if m else True
+
+
 def p_ksu():
     f = f"{DEV}/BoardConfig.mk"
     s = read(f)
+    if not noxis_root():
+        # No root: take the KernelSU config fragment out of the kernel again.
+        new, n = re.subn(r"[ \t]*\\\n[ \t]*vendor/asteroids_ksu\.config[ \t]*(?=\n)", "", s)
+        if n:
+            write(f, new)
+            return ok("KernelSU removed from the kernel (NOXIS_ROOT := 0)", "patched")
+        return ok("No KernelSU in the kernel (NOXIS_ROOT := 0)", "already done")
     if re.search(r"^[ \t]*vendor/asteroids_ksu\.config", s, re.M):
         return ok("KernelSU in the kernel (CONFIG_KSU=y)", "already done")
     new, n = re.subn(r"(\n[ \t]*vendor/asteroids_perf\.config)[ \t]*(?=\n)",
@@ -71,6 +84,8 @@ def p_ksu():
 
 
 def p_ksu_source():
+    if not noxis_root():
+        return ok("KernelSU source in the kernel", "not needed (NOXIS_ROOT := 0)")
     kconf = "kernel/nothing/sm7635/arch/arm64/configs/vendor/asteroids_ksu.config"
     ksrc = "kernel/nothing/sm7635/KernelSU/kernel/Kbuild"
     if not os.path.exists(path("kernel/nothing/sm7635")):

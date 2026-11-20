@@ -4,7 +4,7 @@
 
 <p align="center">
   Hardened Android for the <b>Nothing Phone (3a) / (3a) Pro</b> (<code>asteroids</code>, Snapdragon 7s Gen 3 / SM7635)<br>
-  LineageOS 24.0 base · Android 17 · KernelSU in the kernel · offline virus scan · no Google
+  LineageOS 24.0 base · Android 17 · no root by default (KernelSU optional) · offline virus scan · no Google
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@ Your phone, your rules. Noxis OS is built from source on LineageOS, signed with 
 | Malware | Google Play Protect | **Noxis Guard** – offline ClamAV signatures + trojan patterns |
 | Updates | Nothing's servers | your GitHub releases, A/B with automatic rollback |
 
-**Model:** unlocked bootloader + KernelSU in the kernel, root only for apps you allow one by one.
+**Model:** no root by default (`NOXIS_ROOT := 0`) – the way to verified boot and a bootloader locked with your own key (`./noxis.sh avb`). With `NOXIS_ROOT := 1` in `vendor/noxis/config/noxis.mk` you get KernelSU in the kernel instead, root only for apps you allow one by one – then the bootloader must stay unlocked.
 
 ### Why now: Android developer verification (2027)
 
@@ -143,6 +143,7 @@ Keep the PC awake during the build (Hyprland): `pkill hypridle; ./noxis.sh build
 | `NOXIS_DEBUG=1` | **debug build**: userdebug, ADB from the first boot without approval – boot-loop hunting only |
 | `NOXIS_CCACHE=1` | turn ccache on (off by default, see Known issues) |
 | `NOXIS_OTHER_FIRMWARE=1` | allow blobs from a different Nothing OS version than the device tree expects |
+| `NOXIS_ROOT := 0/1` (in `vendor/noxis/config/noxis.mk`) | `0` (default): no root, no KernelSU manager/modules – required for `./noxis.sh avb lock`. `1`: KernelSU in the kernel, manager + modules via postinstall |
 | `NOXIS_KSU_PIN=v3.3.1` | KernelSU release built into the kernel (`none` = keep the kernel tree's copy) |
 | `NOXIS_SRC=/path` | source tree on another disk |
 
@@ -235,7 +236,7 @@ The security center of Noxis OS – **Settings → Noxis Guard** or the app icon
 | Notification content on the lock screen | hidden |
 | Time server | pool.ntp.org |
 
-### KernelSU – root per app
+### KernelSU – root per app (only with `NOXIS_ROOT := 1`)
 
 The official `tiann/KernelSU` is built into the kernel. `./noxis.sh build` replaces the kernel tree's own copy with the **official release `v3.3.1`** (`NOXIS_KSU_PIN`), and `./noxis.sh apps` bundles the officially signed manager of exactly that release – kernel and manager then speak the same interface version (otherwise: *Manager update required* / *Kernel update required*).
 
@@ -352,7 +353,7 @@ Each step checks the one before it, and everything up to `lock` can be undone wh
 | `./noxis.sh avb log` | Kernel/init log of a failed boot (pstore) – to find why verification fails. |
 | `./noxis.sh avb restore` | Back to vbmeta with verification off. |
 | `./noxis.sh avb key` | Writes your AVB public key into the bootloader (`fastboot flash avb_custom_key`). Stops if the bootloader refuses it – then locking is impossible on this phone. |
-| `./noxis.sh avb lock` | Only if verified boot was confirmed, the key matches and OEM unlocking is on: type `LOCK` → `fastboot flashing lock` (**wipes the phone**). From then on every `sign` builds with verified boot on. |
+| `./noxis.sh avb lock` | Only if verified boot was confirmed, the key matches, OEM unlocking is on and the phone has **no root** (`NOXIS_ROOT := 0`, no KernelSU, no modules): type `LOCK` → `fastboot flashing lock` (**wipes the phone**). From then on every `sign` builds with verified boot on. |
 
 Keep **OEM unlocking** on after locking – it is the way back (`fastboot flashing unlock`). Never lose `~/.noxis-keys`: without `avb.pem` no update boots on a locked phone.
 

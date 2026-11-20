@@ -546,6 +546,7 @@ ksu_pin() {
 # Only the KernelSU manager: download the matching one and, if the phone is
 # connected with USB debugging, install it right away (updates the old one).
 cmd_ksu() {
+  noxis_root || die "This build has no root (NOXIS_ROOT := 0 in vendor/noxis/config/noxis.mk)"
   need curl "install curl"; need unzip "install unzip"
   local tag
   tag=$(ksu_tag); [ -n "$tag" ] || die "no matching KernelSU manager"
@@ -639,6 +640,13 @@ cmd_apps() {
   install_apk TorBrowser        "$(tor_url)" false
   # Virus signatures for Noxis Guard (ClamAV, Android malware only)
   install_avdb
+  if ! noxis_root; then
+    # NOXIS_ROOT := 0 - no KernelSU: no manager, no modules (also not leftovers)
+    rm -rf "$NOXIS/vendor/noxis/prebuilt/KernelSU" "$POST/modules" "$POST"/KernelSU*.apk
+    c "No root (NOXIS_ROOT := 0): KernelSU manager and modules left out"
+    [ -d "$SRC/vendor" ] && cmd_vendor
+    return 0
+  fi
   # KernelSU modules from ksu-modules/ → installed after flashing
   build_ksu_modules
   # The manager has to match the KernelSU in the kernel and be officially signed
@@ -903,6 +911,12 @@ cmd_opsec() {
 }
 
 # ------------------------------------------------------------ sign
+# NOXIS_ROOT := 0/1 from noxis.mk (default 1): KernelSU or no root at all
+noxis_root() {
+  local r; r=$(sed -n 's/^NOXIS_ROOT *:= *\([01]\).*/\1/p' "$NOXIS/vendor/noxis/config/noxis.mk" 2>/dev/null)
+  [ "${r:-1}" = 1 ]
+}
+
 noxis_version() {  # single source: vendor/noxis/config/noxis.mk
   sed -n 's/^NOXIS_VERSION := //p' "$NOXIS/vendor/noxis/config/noxis.mk" | head -n1
 }
@@ -1569,6 +1583,18 @@ EOF
       printf '    %-22s %s\n' "slot" "$slot" "verifiedbootstate" "$vbs" "veritymode" "${vm:-?}" \
         "bootloader" "$ds" "OEM unlocking allowed" "$oem"
       [ "$oem" = 1 ] && avb_mark oem-unlock-allowed || warn "OEM unlocking is OFF – turn it on (Developer options) before ANY lock"
+      # Root must be gone: KernelSU modules may change partitions/vbmeta, a locked
+      # bootloader would then refuse to boot.
+      local root ksu
+      root=$(adb shell getprop ro.noxis.root | tr -d '\r')
+      ksu=$(adb shell 'ls /data/adb/ksud /data/adb/modules 2>/dev/null; command -v su' 2>/dev/null | tr -d '\r')
+      printf '    %-22s %s\n' "root" "${root:-?}${ksu:+ (KernelSU/su found)}"
+      if [ "$root" = 0 ] && [ -z "$ksu" ]; then
+        avb_mark no-root
+      else
+        rm -f "$AVB_STATE/no-root"
+        warn "Root present – build with NOXIS_ROOT := 0 and flash it with a factory reset before locking"
+      fi
       if [ "$vm" = enforcing ]; then
         avb_mark verified-boot-ok "$slot $(date -u +%FT%TZ)"
         c "✓ Android runs with verified boot (dm-verity enforcing). Next: ./noxis.sh avb key"
@@ -1613,6 +1639,7 @@ EOF
       avb_has verified-boot-ok || die "Verified boot not confirmed – ./noxis.sh avb test + status"
       [ "$(cat "$AVB_STATE/custom-key" 2>/dev/null)" = "$sum" ] || die "avb_custom_key not flashed with the current key – ./noxis.sh avb key"
       avb_has oem-unlock-allowed || die "OEM unlocking not confirmed ON – turn it on, then ./noxis.sh avb status"
+      avb_has no-root || die "Root (KernelSU) found on the phone – locking only with a build without root (NOXIS_ROOT := 0), then ./noxis.sh avb status"
       cat <<EOF
 
   LOCK THE BOOTLOADER
@@ -1653,7 +1680,7 @@ case "${1:-}" in
   flash)  cmd_flash ;;
   postinstall|nachinstall) cmd_postinstall ;;
   ksu)    cmd_ksu ;;
-  overlayfix) shift; bash "$NOXIS/tools/noxis_rro_hotfix.sh" "$NOXIS" "$SRC" "$KEYS" "$@" ;;
+  overlayfix) noxis_root || die "overlayfix needs KernelSU (NOXIS_ROOT := 1)"; shift; bash "$NOXIS/tools/noxis_rro_hotfix.sh" "$NOXIS" "$SRC" "$KEYS" "$@" ;;
   eta)    python3 "$NOXIS/tools/noxis_eta.py" "$SRC/out" --every 30 ;;
   direct|direkt) cmd_direct ;;
   sysextfix) cmd_sysextfix ;;

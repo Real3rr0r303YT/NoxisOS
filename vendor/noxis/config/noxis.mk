@@ -4,11 +4,16 @@
 # ============================================================
 NOXIS_VERSION := 1.4
 NOXIS_PATH := vendor/noxis
+# Root: 1 = KernelSU in the kernel + manager + modules; 0 = no root at all
+# (needed for verified boot / a locked bootloader). Read by noxis.sh and
+# tools/noxis_patch.py too.
+NOXIS_ROOT := 0
 
 # Identität
 PRODUCT_SYSTEM_EXT_PROPERTIES += \
     ro.noxis.version=$(NOXIS_VERSION) \
-    ro.noxis.device=asteroids
+    ro.noxis.device=asteroids \
+    ro.noxis.root=$(NOXIS_ROOT)
 
 # Own OTA updates instead of LineageOS servers: Settings → System → Updater reads this JSON,
 # downloads the OTA from the GitHub release and checks it against your release key
