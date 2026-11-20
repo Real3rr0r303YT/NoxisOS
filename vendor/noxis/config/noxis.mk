@@ -2,7 +2,7 @@
 #  Noxis OS – Produktkonfiguration
 #  Wird von device/nothing/asteroids/lineage_asteroids.mk geerbt
 # ============================================================
-NOXIS_VERSION := 1.3
+NOXIS_VERSION := 1.4
 NOXIS_PATH := vendor/noxis
 
 # Identität
