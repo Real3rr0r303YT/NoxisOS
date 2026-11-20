@@ -1355,6 +1355,15 @@ avbtool() {
 avb_mark() { mkdir -p "$AVB_STATE"; printf '%s\n' "${2:-$(date -u +%FT%TZ)}" > "$AVB_STATE/$1"; }
 avb_has()  { [ -s "$AVB_STATE/$1" ]; }
 
+# Verified boot confirmed by ./noxis.sh avb status - or, on phones whose
+# bootloader passes no vbmeta info while unlocked (Nothing Phone (3a)), the
+# owner accepts an untested lock: NOXIS_AVB_UNTESTED=1.
+avb_vb_ok() {
+  avb_has verified-boot-ok && return 0
+  [ "${NOXIS_AVB_UNTESTED:-0}" = 1 ] || return 1
+  warn "NOXIS_AVB_UNTESTED=1: verified boot was NOT confirmed on this phone"
+}
+
 # vbmeta of the newest img.zip, re-signed with the Noxis AVB key and flags 0
 # (verification on). Same descriptors and rollback index - nothing is rebuilt.
 avb_verify_image() {  # <out file>
@@ -1475,7 +1484,7 @@ EOF
       rm -rf "$tmp"; fastboot reboot
       ;;
     key)
-      avb_has verified-boot-ok || die "First: ./noxis.sh avb test + ./noxis.sh avb status (verified boot must work)"
+      avb_vb_ok || die "First: ./noxis.sh avb test + ./noxis.sh avb status (verified boot must work)"
       local pk; pk=$(mktemp)
       avbtool extract_public_key --key "$KEYS/avb.pem" --output "$pk"
       c "Noxis AVB key: $(sha256sum "$pk" | cut -c1-16)…"
@@ -1492,7 +1501,7 @@ EOF
     lock)
       local pk sum; pk=$(mktemp); avbtool extract_public_key --key "$KEYS/avb.pem" --output "$pk"
       sum=$(sha256sum "$pk" | cut -d' ' -f1); rm -f "$pk"
-      avb_has verified-boot-ok || die "Verified boot not confirmed – ./noxis.sh avb test + status"
+      avb_vb_ok || die "Verified boot not confirmed – ./noxis.sh avb test + status"
       [ "$(cat "$AVB_STATE/custom-key" 2>/dev/null)" = "$sum" ] || die "avb_custom_key not flashed with the current key – ./noxis.sh avb key"
       avb_has no-root || die "Root (su / KernelSU) found on the phone – install the current Noxis (no root) with a factory reset, then ./noxis.sh avb status"
       cat <<EOF
@@ -1514,8 +1523,25 @@ EOF
         die "OEM unlocking is not ON (get_unlock_ability=${ability:-?}) – turn it on in Developer options. NOT locked."
       fi
       c "OEM unlocking: on (bootloader confirms) – the way back stays open"
+      if [ "${NOXIS_AVB_UNTESTED:-0}" = 1 ] && ! avb_has verified-boot-ok; then
+        cat <<EOF
+
+  UNTESTED: this phone never showed verified boot running. If Noxis does not
+  boot locked, the way back is: fastboot flashing unlock (wipes again) and
+  ./noxis.sh flash. That needs OEM unlocking ON - checked above.
+
+EOF
+      fi
       read -rp "Type LOCK to continue: " a
       if [ "$a" != LOCK ]; then fastboot reboot >/dev/null 2>&1 || true; exit 0; fi
+      # A locked bootloader refuses vbmeta with verification off (flags 3) -
+      # the current slot gets the Noxis-signed vbmeta with verification on.
+      local v slot; v=$(mktemp)
+      avb_verify_image "$v"
+      slot=$(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')
+      c "flash vbmeta_${slot:-a} (verification ON)"
+      flash_part "vbmeta_${slot:-a}" "$v" || { rm -f "$v"; fastboot reboot >/dev/null 2>&1 || true; die "flash failed – NOT locked"; }
+      rm -f "$v"
       avb_mark locked
       c "fastboot flashing lock – confirm on the phone with the volume keys + power"
       fastboot flashing lock
