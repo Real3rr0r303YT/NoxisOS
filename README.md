@@ -190,6 +190,16 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 
 Vendor-signed APKs with **compressed native libraries** (IronFox, Tor Browser, the KernelSU manager, sometimes Mullvad) cannot be pre-installed system apps on Android 17 without breaking their signature. `./noxis.sh build` detects this, keeps them out of the image and puts them into `postinstall/` – `./noxis.sh postinstall` installs them as normal apps.
 
+### Google services in the app sandbox (microG)
+
+Noxis ships no Google code. If an app needs Google services (push notifications, maps, sign-in), `./noxis.sh postinstall` installs **microG** – the free re-implementation of Play services – from microG's official repo (SHA-256 checked against the repo index):
+
+* `microG Services` (`com.google.android.gms`) and `microG Companion` (`com.android.vending`) are **normal user apps**: they run in the ordinary app sandbox without system privileges, get only the permissions you grant, and can be uninstalled at any time.
+* This works because LineageOS 24 lets only apps signed with **microG's official key** pretend to have Google's signature – nothing else can.
+* Then: open microG Settings → enable *Google device registration* and *Cloud Messaging* (push) as needed. Play Store apps come from **Aurora Store**.
+* Difference to GrapheneOS' sandboxed Google Play: that runs Google's real Play services through GrapheneOS' own compatibility layer, which only GrapheneOS has. microG is a re-implementation – most apps work, but apps that require Play Integrity "strong" (some banking apps, Google Wallet) do not.
+* Not wanted? `NOXIS_MICROG=0 ./noxis.sh apps` – or just uninstall both apps on the phone.
+
 ### Why are some apps not pre-installed?
 
 Every app ends up on the phone in one of three ways:

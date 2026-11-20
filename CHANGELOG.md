@@ -6,6 +6,7 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 
 - **No root by default (`NOXIS_ROOT := 0`):** no KernelSU in the kernel, no manager, no modules – the requirement for verified boot. `NOXIS_ROOT := 1` brings KernelSU back.
 - **`./noxis.sh avb`**: guarded path to verified boot and a locked bootloader with your own key (test → status → key → lock); refuses to lock while root is on the phone.
+- **Google services in the app sandbox:** microG (Services + Companion) as normal user apps via postinstall – LineageOS 24 only accepts microG's official signature for this. `NOXIS_MICROG=0` skips it.
 - **Widgets** in all own apps: clock, battery, calendar, notes, favourites (phone), calculator, camera – Nothing dot-matrix style.
 - **`./noxis.sh avb`**: guarded path to verified boot and a locked bootloader with your own key (test → status → key → lock).
 

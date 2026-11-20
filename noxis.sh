@@ -352,6 +352,32 @@ install_post() {  # <name> <url> – user app, installed via adb after flashing
   return 0
 }
 
+# microG: free re-implementation of Google Play services. LineageOS 24 lets
+# only apps signed with microG's official key fake the Google signature, so
+# microG works as an ordinary USER app - in the normal app sandbox, without
+# system privileges, uninstallable at any time (like GrapheneOS' sandboxed
+# Play, but microG instead of Google's own code). NOXIS_MICROG=0 skips it.
+MICROG_REPO="${NOXIS_MICROG_REPO:-https://microg.org/fdroid/repo}"
+fdroid_repo_post() {  # <name> <repo> <package> – newest APK of a repo, SHA-256 checked
+  local name="$1" repo="$2" pkg="$3" idx sel apk sum
+  idx=$(curl -fsSL --max-time 120 "$repo/index-v1.json") || { warn "$name: $repo not reachable – skipped"; return 0; }
+  sel=$(python3 -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+p = [x for x in d["packages"].get(sys.argv[1], [])
+     if not x.get("nativecode") or "arm64-v8a" in x["nativecode"]]
+b = max(p, key=lambda x: x["versionCode"]) if p else None
+print(b["apkName"] + " " + b["hash"] if b and b.get("hashType", "sha256") == "sha256" else "")' "$pkg" <<<"$idx" 2>/dev/null) || sel=""
+  read -r apk sum <<<"$sel"
+  [ -n "$apk" ] && [ -n "$sum" ] || { warn "$name: $pkg not in $repo – skipped"; return 0; }
+  install_post "$name" "$repo/$apk"
+  [ -f "$POST/$name.apk" ] || return 0
+  if [ "$(sha256sum "$POST/$name.apk" | cut -d' ' -f1)" != "$sum" ]; then
+    rm -f "$POST/$name.apk"; warn "$name: SHA-256 does not match the repo index – removed"
+  fi
+  return 0
+}
+
 install_avdb() {
   local dir="$NOXIS/vendor/noxis/prebuilt/NoxisAvDb" f
   c "Virus signatures (ClamAV) for Noxis Guard"
@@ -636,6 +662,13 @@ cmd_apps() {
   install_apk AuroraStore "$(fdroid_apk com.aurora.store || true)" false
   # Termux: user app (own data dir, updates via F-Droid) → installed after flashing
   install_post Termux "$(fdroid_apk com.termux || true)"
+  # Google services in the app sandbox (microG as user apps, see MICROG_REPO)
+  if [ "${NOXIS_MICROG:-1}" = 1 ]; then
+    fdroid_repo_post microG-Services  "$MICROG_REPO" com.google.android.gms
+    fdroid_repo_post microG-Companion "$MICROG_REPO" com.android.vending
+  else
+    rm -f "$POST"/microG-*.apk
+  fi
   install_apk MullvadVPN        "https://mullvad.net/download/app/apk/latest" false
   install_apk TorBrowser        "$(tor_url)" false
   # Virus signatures for Noxis Guard (ClamAV, Android malware only)
