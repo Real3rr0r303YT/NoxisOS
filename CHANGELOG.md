@@ -5,6 +5,7 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 ## 1.4
 
 - **Widgets** in all own apps: clock, battery, calendar, notes, favourites (phone), calculator, camera – Nothing dot-matrix style.
+- **`./noxis.sh avb`**: guarded path to verified boot and a locked bootloader with your own key (test → status → key → lock).
 
 ## 1.3
 
