@@ -10,6 +10,11 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 - **`avb test` / `avb lock` flashed vbmeta with verification OFF:** they used the flash helper that adds `--disable-verity --disable-verification` (fastboot's "Rewriting vbmeta struct") – so the test never tested anything, and `lock` would have locked with verification off (no boot). Now plain `fastboot flash`. `avb status` also recognises dm-verity devices in `/dev/block/mapper`.
 - **`./noxis.sh avb`:** `key` before `test` (reversible with `avb unkey`), `status` no longer stops without root, `lock` checks OEM unlocking in the bootloader and flashes vbmeta with verification on first.
 
+- **`./noxis.sh flash`** shows which Noxis version gets installed (and the one on the phone) and asks `y` before wiping.
+- **`./noxis.sh sign`** frees space first (older builds in `release/`, aborted sign leftovers in `/tmp`) and checks free space before signing.
+- **`avb restore`** clears `slot-unbootable` (`--set-active`).
+- **Bootloader lock tested and failed** on the Nothing Phone (3a): red *"Your device is corrupt"* screen, rescued via `fastboot flashing unlock` + `./noxis.sh flash`. `avb lock` is blocked on this phone until the cause is found (README).
+
 ## 1.4
 
 - **No root, only OPSEC:** KernelSU removed completely – not in the kernel, no manager, no modules, no `su`. The module NoxisSpoof and `./noxis.sh overlayfix` / `./noxis.sh ksu` are gone. `./noxis.sh apps` deletes old KernelSU leftovers. Requirement for verified boot. **Before updating:** remove all KernelSU modules on the phone.

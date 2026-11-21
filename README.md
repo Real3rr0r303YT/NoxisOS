@@ -31,12 +31,12 @@ Your phone, your rules. Noxis OS is built from source on LineageOS, signed with 
 | Google | Play services built in | not included – F-Droid + Aurora Store instead |
 | Telemetry | Nothing + Google | none |
 | Signing | Nothing's keys | **your own keys** |
-| Root | none | **none** – OPSEC instead of root, verified boot with your own key |
+| Root | none | **none** – OPSEC instead of root (no KernelSU, not even in the kernel) |
 | Network | default | Mullvad killswitch, Tor, per-app firewall |
 | Malware | Google Play Protect | **Noxis Guard** – offline ClamAV signatures + trojan patterns |
 | Updates | Nothing's servers | your GitHub releases, A/B with automatic rollback |
 
-**Model:** no root, only OPSEC – no KernelSU, no su, no root modules. That is the way to verified boot and a bootloader locked with your own key (`./noxis.sh avb`).
+**Model:** no root, only OPSEC – no KernelSU, no su, no root modules. The bootloader stays **unlocked**: on the Nothing Phone (3a) a locked bootloader with a custom key does not boot yet (see [Locking the bootloader](#locking-the-bootloader-noxissh-avb)). Your data is protected by encryption, a strong passphrase, BFU and the duress PIN.
 
 ### Why now: Android developer verification (2027)
 
@@ -52,7 +52,7 @@ Note: this is about *apps*, not the bootloader. Unlocking depends on the phone m
 - **Private browsing** – IronFox (Firefox with uBlock Origin preinstalled) as default browser, Tor Browser, Mullvad VPN
 - **No Google, still apps** – F-Droid and Aurora Store (Play Store apps without an account) preinstalled, Termux after the first boot
 - **Own apps in Nothing design** – calendar, clock, calculator, notes, phone, battery
-- **No root** – nothing on the phone can change the system; verified boot + locked bootloader possible
+- **No root** – no KernelSU, no su; `./noxis.sh opsec` checks the image and the kernel config before every release
 - **Duress PIN** and **microG** (Google services as normal sandboxed apps, optional)
 - **Fast like a flagship** – Settings, launcher, SystemUI and system_server compiled fully ahead of time, zram at 50 % of RAM (more apps stay open), 0.75x animations
 - **OTA updates from GitHub** – Settings → System → System updates
@@ -78,7 +78,7 @@ Every release has everything you need: <https://github.com/Real3rr0r303YT/NoxisO
 2. Settings → About phone → tap *Build number* 7× → Developer options → **OEM unlocking** + **USB debugging** on.
 3. Back up everything – flashing wipes the phone.
 4. `adb reboot bootloader` → `fastboot flashing unlock` → confirm with the volume keys.
-5. **Never lock the bootloader again.** Noxis OS is made for an unlocked bootloader; relocking with a custom system can brick the phone.
+5. **Never lock the bootloader by hand.** On the Nothing Phone (3a) Noxis does not boot locked (tested 21.11.2026) – keep **OEM unlocking** on, it is your way back (see below).
 
 ### Fresh install
 
@@ -87,7 +87,7 @@ sha256sum -c SHA256SUMS --ignore-missing            # check the downloads
 img=$(ls Noxis-*-img.zip.part0); img=${img%.part0}
 cat "$img".part* > "$img"                           # put the image zip back together
 git clone https://github.com/Real3rr0r303YT/NoxisOS && mkdir -p NoxisOS/release && mv "$img" NoxisOS/release/
-cd NoxisOS && ./noxis.sh flash                      # guided, phone in fastboot mode
+cd NoxisOS && ./noxis.sh flash                      # shows the version, asks y, phone in fastboot mode
 ```
 
 The first boot takes **5–15 minutes** (encryption setup, app optimisation). Then:
@@ -132,6 +132,8 @@ Keep the PC awake during the build (Hyprland): `pkill hypridle; ./noxis.sh build
 | Sources after `sync` (`--depth=1`) | ~110 GB |
 | Peak during `build` (+ `out/`) | ~250 GB |
 | After `sign` | ~230 GB (`out/` kept) – `NOXIS_KEEP_OUT=0 ./noxis.sh cleanup` frees ~120 GB |
+
+`./noxis.sh sign` frees space by itself first: older builds in `release/` (they are on GitHub) and leftovers of an aborted sign in `/tmp` are deleted, then it checks for ~15 GB free – it stops before signing instead of failing after 10 minutes with *No space left on device*. `out/` is never touched.
 
 ### Build variables
 
@@ -293,13 +295,13 @@ The security center of Noxis OS – **Settings → Noxis Guard** or the app icon
 | Kernel hardening | `vendor/noxis/config/BoardConfigNoxis.mk` | `init_on_alloc=1 init_on_free=1 page_alloc.shuffle=1 slab_nomerge randomize_kstack_offset=on` |
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
-| Name | `vendor/lineage/config/version.mk` | "Noxis-1.4-DATE" in Settings (number from `NOXIS_VERSION` in `noxis.mk`) |
+| Name | `vendor/lineage/config/version.mk` | "Noxis-<version>-DATE" in Settings (number from `NOXIS_VERSION` in `noxis.mk`) |
 | Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS" with the Noxis logo |
 | About phone | `version.mk` + `NoxisLineageSdkOverlay` | "NoxisOS version" instead of "LineageOS version" |
 | System updates | `NoxisUpdaterOverlay` | NoxisOS name, Noxis mark and colours on the updater card, links to GitHub |
 | Browser | `vendor/lineage/config/common.mk` | Jelly out, IronFox as default browser |
 | Setup wizard | `NoxisSetupWizardOverlay` | "Welcome to NoxisOS", Noxis mark in the welcome animation (`raw/lottie_welcome`, made by `tools/gen_setup_lottie.py`) and on the finish screen |
-| Recovery + fastbootd | `bootable/recovery` | Noxis logos (blue recovery, red fastbootd), Noxis menu colours and "NoxisOS 1.4 (DATE)" instead of LineageOS logos and "Version 24.0" |
+| Recovery + fastbootd | `bootable/recovery` | Noxis logos (blue recovery, red fastbootd), Noxis menu colours and "NoxisOS <version> (DATE)" instead of LineageOS logos and "Version 24.0" |
 | zram | `device/nothing/asteroids/init/fstab.zram.2g` | 50 % of RAM instead of a fixed 2 GB |
 | Easter egg | `LineageParts` `PlatLogoActivity` | tap the NoxisOS version: Noxis dot-matrix egg – waves on every touch, a message after 7 taps, long press for the credit |
 | Restart with cable | `vendor/noxis/config/init/noxis-charger.rc` | boots Android instead of the black charging screen after a restart |
@@ -312,6 +314,7 @@ Everything is written directly with fastboot – no OTA via `adb sideload` for t
 
 | Step | What happens |
 |---|---|
+| 0 | Shows which Noxis version gets installed (and which one is on the phone, if adb sees it): **"Noxis OS 1.5 (20.11.2026) is going to be installed"** – the phone gets wiped, press `y` to continue |
 | 1 | Checks the phone: fastboot, unlocked, `asteroids` (the bootloader reports the Qualcomm name **`pineapple`** – that is correct) |
 | 2 | `fastboot --set-active=a`, then `boot`, `init_boot`, `vendor_boot`, `recovery`, `dtbo`, `vbmeta*` into **both slots**. The Nothing bootloader reports no `has-slot`, so the suffix is set explicitly |
 | 3 | `vbmeta` with `--disable-verity --disable-verification` (see Known issues) |
@@ -336,27 +339,53 @@ Stuck for more than 15 minutes: hold **Volume down + Power** for 15 s → fastbo
 
 ## Locking the bootloader (`./noxis.sh avb`)
 
-Each step checks the one before it, and everything up to `lock` can be undone while the bootloader is unlocked:
+> **Status on the Nothing Phone (3a): not possible yet.** Locked, Noxis does not boot (red *"Your device is corrupt"* screen, 21.11.2026). `./noxis.sh avb lock` is blocked on this phone. The bootloader stays unlocked – see [Security without a locked bootloader](#security-without-a-locked-bootloader).
+
+### What OEM unlocking is – your way back
+
+*Developer options → OEM unlocking* is a switch that allows the bootloader to be unlocked (`fastboot flashing unlock`). It can only be changed inside Android, so only someone who knows your PIN. Off, the bootloader refuses every unlock – on a locked phone that does not boot, that means the phone is dead. **Keep it on** as long as you run your own ROM. Unlocking always wipes all data, so it gives nobody access to your files.
+
+The bootloader with its **fastboot mode** lives in its own protected memory and starts before Android. When it refuses Android (corrupt screen), **Volume down + Power** still gets you into fastboot, and with OEM unlocking on: `fastboot flashing unlock` → `./noxis.sh flash`. `avb lock` asks the bootloader itself (`fastboot flashing get_unlock_ability` = 1) and refuses to lock otherwise – that is how the phone was rescued on 21.11.2026.
+
+### Commands
 
 | Step | What happens |
 |---|---|
-| `./noxis.sh avb test` | vbmeta of the **current slot** re-signed with your AVB key and verification **on** (same descriptors, nothing rebuilt). If Android does not boot, the phone falls back to the other slot. |
-| `./noxis.sh avb status` | Shows `verifiedbootstate`, `veritymode`, OEM unlocking. `veritymode=enforcing` = verified boot works. |
-| `./noxis.sh avb log` | Kernel/init log of a failed boot (pstore) – to find why verification fails. |
-| `./noxis.sh avb restore` | Back to vbmeta with verification off. |
-| `./noxis.sh avb key` | Writes your AVB public key into the bootloader (`fastboot flash avb_custom_key`), safe while unlocked. On the Nothing Phone (3a) run it **before** `avb test`: the bootloader may pass the vbmeta info to Android only for a trusted key. Stops if the bootloader refuses it – then locking is impossible on this phone. |
-| `./noxis.sh avb unkey` | Erases `avb_custom_key` again (only while unlocked). |
-| `./noxis.sh avb lock` | Only if verified boot was confirmed, the key matches, OEM unlocking is on and the phone has **no root** (no KernelSU, no su): type `LOCK` → `fastboot flashing lock` (**wipes the phone**). From then on every `sign` builds with verified boot on. |
+| `./noxis.sh avb key` | Writes your AVB public key into the bootloader (`avb_custom_key`), safe while unlocked. |
+| `./noxis.sh avb unkey` | Erases `avb_custom_key` again. |
+| `./noxis.sh avb test` | vbmeta of the current slot re-signed with your AVB key and verification **on** (plain `fastboot flash`, nothing rebuilt). |
+| `./noxis.sh avb status` | `verifiedbootstate`, `veritymode`, dm-verity devices, root. |
+| `./noxis.sh avb log` | Kernel/init log of the previous boot (bug report, no root needed). |
+| `./noxis.sh avb restore` | vbmeta with verification off again, clears `slot-unbootable` (`--set-active`), reboots. |
+| `./noxis.sh avb lock` | Checks verified boot, key, no root and OEM unlocking (in the bootloader), flashes vbmeta with verification on, type `LOCK` → `fastboot flashing lock` (**wipes**). **Blocked on the Nothing Phone (3a).** |
 
-**Nothing Phone (3a), tested on 1.4/1.5:** while unlocked, Nothing's bootloader passes no vbmeta info to Android, and with verification ON (`avb test`) it refuses to start Noxis at all – the slot is marked unbootable on the first try, the kernel never starts. The ROM itself is consistent: `avbtool verify_image` passes for vbmeta, the chains (boot, recovery, vbmeta_system, vbmeta_vendor) and dtbo/init_boot/vendor_boot, the bootloader accepts `avb_custom_key`, and the rollback index (security patch 2026-11-01) is newer than the firmware's (2026-04-05). Nothing phones are reported to boot custom-key builds once **locked** (avbroot device list), so on this phone `avb test` cannot prove anything – locking is the only test: `NOXIS_AVB_UNTESTED=1 ./noxis.sh avb lock`. If it does not boot locked: `fastboot flashing unlock` (wipes) and `./noxis.sh flash`.
+### What we found on the Nothing Phone (3a) (Noxis 1.4/1.5)
 
-**Lock attempt on 21.11.2026 (Noxis 1.5): failed.** Locked, the bootloader showed the red screen *"Your device is corrupt. It can't be trusted and will not boot"* – it rejects the custom-key signature (a trusted custom key would show the yellow *different OS* warning). Recovered with `fastboot flashing unlock` + `./noxis.sh flash` (OEM unlocking was on). **Do not lock again** until the cause is found.
+| Test | Result |
+|---|---|
+| `avbtool verify_image` on the release | ✅ vbmeta, chains (boot, recovery, vbmeta_system, vbmeta_vendor), dtbo, init_boot, vendor_boot – all signed with your key and matching |
+| `avb key` | ✅ bootloader accepts `avb_custom_key` |
+| Rollback index | ✅ Noxis 2026-11-01, Nothing firmware 2026-04-05 |
+| Unlocked, verification off | Android reads vbmeta itself: `VerificationDisabled` → no dm-verity (bootloader passes no `vbmeta.digest` / `veritymode` while unlocked) |
+| Unlocked, verification on (`avb test`) | ❌ bootloader refuses at once, slot marked unbootable, the kernel never starts |
+| **Locked** with your key | ❌ red **"Your device is corrupt"** – the bootloader rejects the custom-key signature (a trusted key would show the yellow *different OS* warning). Rescued with `fastboot flashing unlock` + `./noxis.sh flash`. |
 
-Keep **OEM unlocking** on after locking – it is the way back (`fastboot flashing unlock`). Never lose `~/.noxis-keys`: without `avb.pem` no update boots on a locked phone.
+Fixed on the way: `avb test`/`lock` flashed vbmeta through the flash helper that adds `--disable-verity` (fastboot's *Rewriting vbmeta struct*) – the early tests never had verification on; now plain `fastboot flash`. Nothing phones are listed as supporting custom AVB keys (avbroot device list), so the cause is still open – until it is found, do not lock.
+
+### Security without a locked bootloader
+
+| Attack | Protected? |
+|---|---|
+| Reading data from a phone that is off / restarted (BFU) | ✅ file encryption, key bound to your passphrase and the secure hardware |
+| Guessing the PIN | ✅ secure hardware throttles – use a **passphrase** (12+ characters) |
+| Being forced to unlock | ✅ **duress PIN** wipes the phone |
+| Fingerprint forced onto the sensor | ✅ if fingerprint unlock is **off** |
+| Phone unlocked after the first unlock (AFU) | ⚠ auto-reboot in Guard (2–4 h) brings it back to BFU; switch it off when it matters |
+| Secretly flashed spy software ("evil maid") | ❌ only a locked bootloader stops that – if the phone was out of your hands, do not unlock it, flash Noxis again |
 
 ## Known issues
 
-* **Verified boot is switched off by default.** With verification on, `init` aborted during boot on early builds. `vbmeta` is flashed with `--disable-verity --disable-verification`, and `./noxis.sh sign` builds the vbmeta inside the OTA the same way (`--flags 3`), so updates boot too. The images are still signed with your own keys. Do **not** run `fastboot flashing lock` by hand – use the guarded path below.
+* **Verified boot is switched off.** With verification on, the Nothing bootloader refuses to start Noxis (unlocked: slot unbootable; locked: red *corrupt* screen – see [Locking the bootloader](#locking-the-bootloader-noxissh-avb)). `vbmeta` is flashed with `--disable-verity --disable-verification`, and `./noxis.sh sign` builds the vbmeta inside the OTA the same way (`--flags 3`). The images are still signed with your own keys. Do **not** run `fastboot flashing lock`.
 * **Restart with the USB cable plugged in** used to end in the black charging screen. `noxis-charger.rc` leaves charger mode once after a restart; if the bootloader insists, the phone stays charging – press power.
 * **Missing privileged permissions = boot loop.** `./noxis.sh build` compares every privileged permission of our priv-apps with `vendor/noxis/permissions/*.xml` **before** building.
 * **Firmware/blob version:** the device tree expects Nothing OS B4.1-260928-1204. Blobs from another version build with `NOXIS_OTHER_FIRMWARE=1`, but camera, modem or fingerprint may misbehave.
