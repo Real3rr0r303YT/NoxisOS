@@ -246,27 +246,38 @@ The security center of Noxis OS – **Settings → Noxis Guard** or the app icon
 | Notification content on the lock screen | hidden |
 | Time server | pool.ntp.org |
 
+### Why no root?
+
+Noxis is **OPSEC without root** – no KernelSU, no Magisk, no `su`, not even the KernelSU driver in the kernel.
+
+* **Root breaks the security model.** One app with root (or one bug in a root manager) can read every app's data, switch off Noxis Guard, the firewall and Mullvad's killswitch, and hide malware inside the system where no scan finds it.
+* **Root and a locked bootloader do not go together.** Root tools change `boot`/`vbmeta`; a locked bootloader then refuses to start. Noxis keeps the way to verified boot open.
+* **Less attack surface.** The KernelSU driver hooks into the kernel (syscalls, SELinux) – code that is simply not there cannot be attacked.
+* **What root was used for is built in instead:** your own apps as system apps, per-app firewall, 2G block, USB lock, auto-reboot, duress PIN, microG – all without root.
+
+`./noxis.sh opsec` fails the build if a KernelSU manager, `CONFIG_KSU=y` in the kernel config, KernelSU inside the (compressed) kernel or a `su` binary is found.
+
 ### Firewall (LineageOS per-app network access)
 
 *App info → Mobile data & Wi-Fi* – toggles **Network access**, **Wi-Fi**, **Mobile data**, **VPN**, **Background data**.
 
-| App | Network | Wi-Fi | Mobile | VPN | Background | Root |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|
-| Mullvad VPN | ✓ | ✓ | ✓ | – | ✓ | ✗ |
-| IronFox, Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
-| F-Droid, Aurora Store | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Termux | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Camera, PDF Viewer, Gallery | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Calculator, Clock, Notes, Calendar, Battery | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Phone, SMS, NothingCall | system (cellular) | | | | | ✗ |
-| New apps | allow only when needed | | | | | ✗ |
+| App | Network | Wi-Fi | Mobile | VPN | Background |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Mullvad VPN | ✓ | ✓ | ✓ | – | ✓ |
+| IronFox, Tor Browser | ✓ | ✓ | ✓ | ✓ | ✗ |
+| F-Droid, Aurora Store | ✓ | ✓ | ✓ | ✓ | ✗ |
+| Termux | ✓ | ✓ | ✓ | ✓ | ✗ |
+| Camera, PDF Viewer, Gallery | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Calculator, Clock, Notes, Calendar, Battery | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Phone, SMS, NothingCall | system (cellular) | | | | |
+| New apps | allow only when needed | | | | |
 
 ### Deliberately not included
 
 * **Sandboxed Google Play** – GrapheneOS' GmsCompat spans dozens of patches across `frameworks/base`, PackageManager, Settings and its own app. Without that port there is no working "skeleton", and an empty one is not shipped.
 * **Vanadium** – distributed for GrapheneOS only. IronFox is the hardened browser here.
 * **Play Integrity / keystore spoofing** – not part of Noxis.
-* **Root (KernelSU, Magisk)** – root tools can change the system and break verified boot; Noxis is OPSEC without root.
+* **Root (KernelSU, Magisk)** – see [Why no root?](#why-no-root)
 * **Samsung's One UI launcher** – proprietary.
 
 ---
@@ -291,7 +302,7 @@ The security center of Noxis OS – **Settings → Noxis Guard** or the app icon
 
 | Change | Where | Effect |
 |---|---|---|
-| No root | `device/.../BoardConfig.mk` | the device tree's KernelSU config is removed from the kernel |
+| No root | `device/.../BoardConfig.mk` + `kernel/.../configs/vendor/noxis_noroot.config` | the device tree's KernelSU fragment is removed and our own last fragment sets `# CONFIG_KSU is not set` (KernelSU's Kconfig is *default y*, removing the fragment alone kept it in the kernel up to 1.4) |
 | Kernel hardening | `vendor/noxis/config/BoardConfigNoxis.mk` | `init_on_alloc=1 init_on_free=1 page_alloc.shuffle=1 slab_nomerge randomize_kstack_offset=on` |
 | Noxis product | `lineage_asteroids.mk` | inherits `vendor/noxis/config/noxis.mk` |
 | Nothing camera optional | `device.mk` | builds without the proprietary NTCamera app |
