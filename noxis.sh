@@ -1454,7 +1454,7 @@ EOF
       fastboot flash "vbmeta_${slot:-a}" "$v" || die "flash failed"
       rm -f "$v"
       fastboot reboot
-      c "Wait 5 minutes. Android boots → ./noxis.sh avb status   ·   it does not → ./noxis.sh avb log"
+      c "Wait 5 minutes. Android boots → ./noxis.sh avb status   ·   phone stays in fastboot → ./noxis.sh avb restore, then ./noxis.sh avb log"
       ;;
     status)
       adb_ready || die "No phone via adb (USB debugging on?)"
@@ -1523,7 +1523,12 @@ EOF
       slot=$(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p')
       c "flash vbmeta_${slot:-a} (verification off, as before)"
       flash_part "vbmeta_${slot:-a}" "$tmp/vbmeta.img" || die "flash failed"
+      # After failed boots the bootloader marks the slot unbootable and stays
+      # in fastboot - --set-active clears that and resets the retry counter.
+      c "slot ${slot:-a}: clear 'unbootable', reset retry counter"
+      fastboot --set-active="${slot:-a}" >/dev/null 2>&1 || warn "set-active failed"
       rm -rf "$tmp"; fastboot reboot
+      c "Noxis boots normally. Log of the failed boot: ./noxis.sh avb log (as soon as Android runs)"
       ;;
     key)
       # Safe while unlocked and undone with ./noxis.sh avb unkey. Some
