@@ -1140,6 +1140,8 @@ EOF
     || die "The bootloader is locked – first: fastboot flashing unlock"
 
   local tmp; tmp=$(mktemp -d)
+  # ~4.5 GB unpacked – also gone when flashing stops half way (Ctrl+C, error)
+  trap 'rm -rf -- "$tmp"' EXIT
   unzip -q -o "$img" -d "$tmp"
   c "Making slot a active"
   fastboot --set-active=a
