@@ -1395,6 +1395,10 @@ avb_has()  { [ -s "$AVB_STATE/$1" ]; }
 avb_vb_ok() {
   avb_has verified-boot-ok && return 0
   [ "${NOXIS_AVB_UNTESTED:-0}" = 1 ] || return 1
+  # Nothing Phone (3a), 21.11.2026: locked → red "device is corrupt" screen.
+  if [ "$DEVICE" = asteroids ] && [ "${NOXIS_AVB_I_KNOW:-0}" != 1 ]; then
+    die "Locking failed on the Nothing Phone (3a) (red 'corrupt' screen, README). Not again until the cause is found."
+  fi
   warn "NOXIS_AVB_UNTESTED=1: verified boot was NOT confirmed on this phone"
 }
 

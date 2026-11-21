@@ -350,6 +350,8 @@ Each step checks the one before it, and everything up to `lock` can be undone wh
 
 **Nothing Phone (3a), tested on 1.4/1.5:** while unlocked, Nothing's bootloader passes no vbmeta info to Android, and with verification ON (`avb test`) it refuses to start Noxis at all – the slot is marked unbootable on the first try, the kernel never starts. The ROM itself is consistent: `avbtool verify_image` passes for vbmeta, the chains (boot, recovery, vbmeta_system, vbmeta_vendor) and dtbo/init_boot/vendor_boot, the bootloader accepts `avb_custom_key`, and the rollback index (security patch 2026-11-01) is newer than the firmware's (2026-04-05). Nothing phones are reported to boot custom-key builds once **locked** (avbroot device list), so on this phone `avb test` cannot prove anything – locking is the only test: `NOXIS_AVB_UNTESTED=1 ./noxis.sh avb lock`. If it does not boot locked: `fastboot flashing unlock` (wipes) and `./noxis.sh flash`.
 
+**Lock attempt on 21.11.2026 (Noxis 1.5): failed.** Locked, the bootloader showed the red screen *"Your device is corrupt. It can't be trusted and will not boot"* – it rejects the custom-key signature (a trusted custom key would show the yellow *different OS* warning). Recovered with `fastboot flashing unlock` + `./noxis.sh flash` (OEM unlocking was on). **Do not lock again** until the cause is found.
+
 Keep **OEM unlocking** on after locking – it is the way back (`fastboot flashing unlock`). Never lose `~/.noxis-keys`: without `avb.pem` no update boots on a locked phone.
 
 ## Known issues
