@@ -10,7 +10,11 @@
 package com.android.server.locksettings;
 
 import android.content.Context;
+import android.os.Binder;
+import android.os.IRecoverySystem;
 import android.os.RecoverySystem;
+import android.os.ServiceManager;
+import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.util.Base64;
 import android.util.Slog;
@@ -26,7 +30,10 @@ import javax.crypto.spec.PBEKeySpec;
 
 /**
  * Duress PIN (like GrapheneOS): a second PIN / password, set in Noxis Guard. Entered on the
- * lock screen of the owner, it wipes the phone (factory reset via recovery) instead of unlocking.
+ * lock screen of the owner, it wipes the phone instead of unlocking - silently: the lock screen
+ * only shows "wrong PIN", the phone restarts without any "factory reset" dialog, the recovery
+ * wipes /data with its screen off (bootable/recovery patch: reason "noxis_duress" → stub UI)
+ * and then powers the phone off.
  *
  * Safety:
  *  - Only a salted PBKDF2-SHA256 hash is stored, in locksettings.db (system only; reading it
@@ -77,14 +84,42 @@ final class NoxisDuress {
         }
     }
 
-    /** Factory reset via recovery, off the binder thread. Runs once. */
+    /** Recovery reads this reason and wipes with its screen off (bootable/recovery patch). */
+    static final String REASON = "noxis_duress";
+
+    /**
+     * Silent wipe, off the binder thread, runs once:
+     *  1. BCB = "--wipe_data --shutdown_after --reason=noxis_duress" (uncrypt service, like
+     *     RecoverySystemService.rebootRecoveryWithCommand, but without PowerManager.reboot() -
+     *     its ShutdownThread would show "Factory data reset" on the screen).
+     *  2. Keystore keys deleted right away, like a normal forced wipe does.
+     *  3. Reboot via init (sys.powerctl) - no dialog, no animation.
+     * If the silent path fails, the normal (visible) wipe still runs: wiping beats hiding.
+     */
     static void wipe(Context context) {
         if (sWiping) return;
         sWiping = true;
-        Slog.w(TAG, "Duress PIN entered – wiping the device");
         new Thread(() -> {
+            final long id = Binder.clearCallingIdentity();
             try {
-                RecoverySystem.rebootWipeUserData(context, false /* shutdown */, "noxis duress",
+                IRecoverySystem rs = IRecoverySystem.Stub.asInterface(
+                        ServiceManager.getService(Context.RECOVERY_SERVICE));
+                if (rs != null && rs.setupBcb("--wipe_data\n--shutdown_after\n--reason=" + REASON + "\n")) {
+                    try {
+                        android.security.AndroidKeyStoreMaintenance.deleteAllKeys();
+                    } catch (Throwable t) {
+                        // the recovery wipe removes /data anyway
+                    }
+                    SystemProperties.set("sys.powerctl", "reboot,recovery");
+                    return;
+                }
+            } catch (Throwable t) {
+                // fall through to the normal wipe
+            } finally {
+                Binder.restoreCallingIdentity(id);
+            }
+            try {
+                RecoverySystem.rebootWipeUserData(context, true /* shutdown */, REASON,
                         true /* force */, false /* wipeEuicc */);
             } catch (Throwable t) {
                 Slog.e(TAG, "Wipe failed", t);

@@ -428,8 +428,29 @@ def p_duress():
     ok(name, "patched" if (changed or copied) else "already done")
 
 
+def p_duress_recovery():
+    """Duress wipe without a visible "factory reset": with --reason=noxis_duress the recovery
+    uses the stub UI (draws nothing, like quiescent mode), wipes /data and powers off."""
+    name = "Duress PIN: silent wipe in the recovery"
+    f = "bootable/recovery/recovery_main.cpp"
+    if not os.path.exists(path(f)):
+        return ok(name, "skipped (no bootable/recovery)")
+    s = read(f)
+    old = 'if (android::base::GetBoolProperty("ro.boot.quiescent", false)) {'
+    new = ('if (android::base::GetBoolProperty("ro.boot.quiescent", false) ||\n'
+           '      reason.rfind("noxis_duress", 0) == 0) {  // Noxis: duress PIN wipes silently')
+    if new in s:
+        return ok(name, "already done")
+    if s.count(old) != 1:
+        return fail(name, "quiescent check in recovery_main.cpp not found exactly once")
+    if s.find("std::string reason;") < 0 or s.find("std::string reason;") > s.find(old):
+        return fail(name, "reason is not parsed before the UI is set up")
+    write(f, s.replace(old, new, 1))
+    ok(name, "patched")
+
+
 for p in (p_inherit, p_ksu, p_board, p_camera, p_version, p_browser, p_postproc, p_shims, p_openeuicc,
-          p_recovery, p_easteregg, p_zram, p_duress):
+          p_recovery, p_easteregg, p_zram, p_duress, p_duress_recovery):
     try:
         p()
     except FileNotFoundError as e:

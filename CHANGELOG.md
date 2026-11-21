@@ -4,6 +4,7 @@ Made by 3rr0r303YT on TikTok · GPL-3.0
 
 ## 1.5
 
+- **Duress PIN wipes silently:** no "factory reset" dialog and no recovery screen any more – the lock screen shows "wrong PIN", the phone restarts, the recovery wipes with its screen off and powers off. Keystore keys are deleted right away.
 - **KernelSU really gone from the kernel:** KernelSU's kernel option is on by default, so removing the device tree's KernelSU fragment in 1.4 was not enough – the 1.4 kernel still contained the KernelSU driver (no manager, no root for apps, but not clean). New fragment `noxis_noroot.config` switches it off; `./noxis.sh build` throws away an old kernel config with KernelSU so the kernel is rebuilt.
 - **`./noxis.sh opsec`** now checks the kernel config (`CONFIG_KSU`) and compressed kernels – the 1.4 check could not see inside the kernel image.
 - **Verified boot debugging:** `printk.devkmsg=on`, so init's dm-verity/AVB messages are no longer rate-limited away from the boot log.

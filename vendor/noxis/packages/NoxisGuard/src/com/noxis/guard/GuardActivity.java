@@ -216,8 +216,9 @@ public class GuardActivity extends Activity {
         if (!Duress.supported()) return;
         boolean on = Duress.isSet();
         LinearLayout row = row("Notfall-PIN (löscht alles)", (on ? "An" : "Aus")
-                + "\nEine zweite PIN: wer sie am Sperrbildschirm eingibt, setzt das Gerät sofort auf "
-                + "Werkseinstellungen zurück – ohne Nachfrage. Für den Notfall, wenn du entsperren musst.");
+                + "\nEine zweite PIN: wer sie am Sperrbildschirm eingibt, löscht das Gerät heimlich – "
+                + "es zeigt nur „falsche PIN“, startet neu, löscht ohne Anzeige und schaltet sich aus. "
+                + "Für den Notfall, wenn du entsperren musst.");
         row.addView(text("›", 22, false));
         row.setOnClickListener(v -> duressDialog(on));
         mList.addView(row);
