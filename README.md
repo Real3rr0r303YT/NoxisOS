@@ -183,7 +183,7 @@ Built from source by the **[Noxis apps](.github/workflows/noxis-apps.yml)** GitH
 | **Tor Browser** | [torproject.org](https://www.torproject.org) | after the first boot (`postinstall`) |
 | **Termux** | [F-Droid](https://f-droid.org/packages/com.termux/) | terminal with packages (`pkg install …`) – after the first boot, normal updatable app |
 | GrapheneOS Camera + PDF Viewer | [GrapheneOS](https://github.com/GrapheneOS) | in the image, no network access |
-| Your own APKs (e.g. ZArchiver) | you | put the `.apk` (arm64-v8a!) into `postinstall/` – `./noxis.sh postinstall` installs it too |
+| Your own APKs | you | put the `.apk` (arm64-v8a!) into `postinstall/` – `./noxis.sh postinstall` installs it too |
 
 **Home screen:** LineageOS' launcher (Trebuchet) – clean, with icon packs, grid size, hidden apps and themed icons. Widgets of the own apps: long-press the home screen → *Widgets*.
 
@@ -213,7 +213,7 @@ Why not everything in the image:
 
 - **Apps that update themselves** (Termux, Tor Browser) work best as normal apps. Baked into the image you would be stuck with the build's version until the next ROM update.
 - **Signature:** vendor-signed APKs with compressed native libraries cannot be system apps on Android 17 without breaking their signature – the build moves them to `postinstall/` automatically.
-- **Third-party and closed-source APKs** (e.g. ZArchiver) are not redistributed in this repository. Put them into `postinstall/` yourself.
+- **Third-party and closed-source APKs** are not redistributed in this repository. Put them into `postinstall/` yourself.
 - **No Google apps** on purpose: Google Play services and the Play Store are proprietary and phone home – Aurora Store gives you Play Store apps without them.
 
 **After an OTA:** apps in the image are updated with the system. Apps from `postinstall` stay installed. If a new Noxis version adds a new post-install app, connect the phone once and run `./noxis.sh postinstall` again – apps that are already installed are just updated.
